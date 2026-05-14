@@ -1,3 +1,9 @@
+
+
+<div align="center">
+  <img src="https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExb2lmbnI0cmswdWcxMDhlOThsdjVvdHVjNnlmb2RkNjY5Y3A4bWhrbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/0fz5uNPHnoVHLEhAW2/giphy.gif" />
+</div>
+
 # 🎮 TV Games Platform
 
 A Jackbox-style web platform where a host runs TV-show games on a main screen and players join from their phones as controllers.
