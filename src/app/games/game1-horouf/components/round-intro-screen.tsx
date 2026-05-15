@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { HoroufGameState } from '../types'
+import { playRoundStartSound } from '../utils/sounds'
 
 const ROUND_ORDINALS: Record<number, string> = {
   1: 'الأولى',
@@ -24,6 +25,10 @@ export default function RoundIntroScreen({ gameState, onStart }: RoundIntroScree
     return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    playRoundStartSound()
+  }, [])
+
   const nextRoundNumber = (gameState.currentRound?.roundNumber ?? 0) + 1
   const ordinal = ROUND_ORDINALS[nextRoundNumber] ?? String(nextRoundNumber)
   const showScores = gameState.currentRound !== null
@@ -37,13 +42,13 @@ export default function RoundIntroScreen({ gameState, onStart }: RoundIntroScree
     >
       <div className="text-center space-y-10">
 
-        <div>
+        <div className="animate-scale-fade-in">
           <p className="text-text-secondary text-lg mb-2">الجولة</p>
           <h1 className="text-6xl font-bold text-text-primary">{ordinal}</h1>
         </div>
 
         {showScores && (
-          <div className="flex items-center gap-12">
+          <div className="flex items-center gap-12 animate-fade-in-up [animation-delay:600ms]">
             <div className="text-center space-y-2">
               <div className="flex items-center justify-center gap-2">
                 <div
@@ -72,7 +77,7 @@ export default function RoundIntroScreen({ gameState, onStart }: RoundIntroScree
 
         <button
           onClick={onStart}
-          className="bg-accent-primary text-bg-primary font-semibold px-10 py-4 rounded-lg hover:bg-accent-hover transition-colors text-lg"
+          className="bg-accent-primary text-bg-primary font-semibold px-10 py-4 rounded-lg hover:bg-accent-hover transition-colors text-lg animate-fade-in-up [animation-delay:900ms]"
         >
           ابدأ الجولة
         </button>

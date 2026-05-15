@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useHoroufGame } from './hooks/use-horouf-game'
+import { playSelectSound, playAwardSound, playNewQuestionSound, playShowAnswerSound } from './utils/sounds'
+import type { TeamId } from './types'
 import SetupScreen from './components/setup-screen'
 import RoundIntroScreen from './components/round-intro-screen'
 import GameBoard from './components/game-board'
@@ -25,6 +27,26 @@ export default function HoroufPage() {
 
   const { phase } = gameState
 
+  function handleSelectCell(cellId: string): void {
+    playSelectSound()
+    selectCell(cellId)
+  }
+
+  function handleAwardPoint(teamId: TeamId): void {
+    playAwardSound()
+    awardPoint(teamId)
+  }
+
+  function handleNewQuestion(): void {
+    playNewQuestionSound()
+    newQuestion()
+  }
+
+  function handleShowAnswer(): void {
+    playShowAnswerSound()
+    showAnswer()
+  }
+
   if (phase === 'setup') {
     return <SetupScreen onStart={initGame} />
   }
@@ -37,10 +59,10 @@ export default function HoroufPage() {
     return (
       <GameBoard
         gameState={gameState}
-        onSelectCell={selectCell}
-        onShowAnswer={showAnswer}
-        onNewQuestion={newQuestion}
-        onAwardPoint={awardPoint}
+        onSelectCell={handleSelectCell}
+        onShowAnswer={handleShowAnswer}
+        onNewQuestion={handleNewQuestion}
+        onAwardPoint={handleAwardPoint}
         onAdvanceFromWinReveal={advanceFromWinReveal}
       />
     )

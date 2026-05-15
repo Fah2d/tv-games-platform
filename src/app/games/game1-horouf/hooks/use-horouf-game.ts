@@ -58,10 +58,10 @@ const initialState: HoroufGameState = {
 function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGameState {
   switch (action.type) {
     case 'INIT_GAME': {
-      const { gridSize, roundsToWin, hostName, team1Color, team2Color } = action.payload
+      const { gridSize, roundsToWin, hostName, team1Name, team2Name, team1Color, team2Color } = action.payload
       const teams: [TeamConfig, TeamConfig] = [
-        { id: 'team1', name: 'الفريق الأول', color: team1Color, score: 0 },
-        { id: 'team2', name: 'الفريق الثاني', color: team2Color, score: 0 },
+        { id: 'team1', name: team1Name.trim() || 'الفريق الأول', color: team1Color, score: 0 },
+        { id: 'team2', name: team2Name.trim() || 'الفريق الثاني', color: team2Color, score: 0 },
       ]
       return {
         phase: 'round-intro',
@@ -92,6 +92,25 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
       const { cellId, question } = action.payload
       const round = state.currentRound
       if (!round || state.phase !== 'playing') return state
+
+      // If the already-selected cell is clicked again, deselect it.
+      if (round.currentCell?.id === cellId) {
+        const newGrid = round.grid.map((gridRow) =>
+          gridRow.map((cell) =>
+            cell.id === cellId ? { ...cell, isSelected: false } : cell
+          )
+        )
+        return {
+          ...state,
+          currentRound: {
+            ...round,
+            grid: newGrid,
+            currentCell: null,
+            currentQuestion: null,
+            showAnswer: false,
+          },
+        }
+      }
 
       // Locate the target cell and confirm it is unclaimed.
       let targetCell: HexCell | null = null

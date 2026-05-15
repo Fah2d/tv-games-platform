@@ -1,6 +1,9 @@
 'use client'
 
+import { useEffect } from 'react'
 import type { HoroufGameState } from '../types'
+import { playMatchWinSound } from '../utils/sounds'
+import Confetti from './confetti'
 
 function toArabicIndic(n: number): string {
   return n.toString().replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[parseInt(d)])
@@ -35,21 +38,45 @@ export default function MatchEndScreen({ gameState, onPlayAgain, onGoHome }: Mat
   const { teams, currentRound } = gameState
   const winner = teams.find((t) => t.id === currentRound?.winner)
 
+  useEffect(() => {
+    playMatchWinSound()
+  }, [])
+
   return (
     <div className="min-h-screen bg-bg-primary flex flex-col items-center justify-center gap-10">
 
-      <TrophyIcon />
+      {/* Background pulse in winner's color */}
+      {winner && (
+        <div
+          className="fixed inset-0 pointer-events-none animate-bg-pulse"
+          style={{ background: `radial-gradient(ellipse at center, ${winner.color} 0%, transparent 70%)` }}
+        />
+      )}
+
+      {/* Confetti */}
+      <Confetti
+        team1Color={teams[0].color}
+        team2Color={teams[1].color}
+      />
+
+      {/* Trophy */}
+      <div className="animate-bounce-in">
+        <TrophyIcon />
+      </div>
 
       {/* Champion banner */}
       <div className="flex flex-col items-center gap-3">
-        <p className="text-text-muted text-base">بطل المباراة</p>
+        <p className="text-text-muted text-base animate-fade-in-up [animation-delay:500ms]">بطل المباراة</p>
         {winner && (
           <>
-            <p className="text-5xl font-bold" style={{ color: winner.color }}>
+            <p
+              className="text-5xl font-bold animate-scale-fade-in [animation-delay:800ms]"
+              style={{ color: winner.color }}
+            >
               {winner.name}
             </p>
             <div
-              className="mt-2 w-24 h-1 rounded-full"
+              className="mt-2 w-24 h-1 rounded-full animate-fade-in-up [animation-delay:800ms]"
               style={{ backgroundColor: winner.color }}
             />
           </>
@@ -57,7 +84,7 @@ export default function MatchEndScreen({ gameState, onPlayAgain, onGoHome }: Mat
       </div>
 
       {/* Final scores */}
-      <div className="flex gap-20">
+      <div className="flex gap-20 animate-fade-in-up [animation-delay:1100ms]">
         {teams.map((team) => (
           <div key={team.id} className="flex flex-col items-center gap-3">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: team.color }} />
@@ -70,7 +97,7 @@ export default function MatchEndScreen({ gameState, onPlayAgain, onGoHome }: Mat
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col items-center gap-3 mt-4">
+      <div className="flex flex-col items-center gap-3 mt-4 animate-fade-in-up [animation-delay:1400ms]">
         <button
           className="px-12 py-4 rounded-xl text-lg font-bold bg-accent-primary text-bg-primary hover:bg-accent-hover transition-colors"
           onClick={onPlayAgain}

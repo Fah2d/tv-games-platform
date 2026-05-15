@@ -22,6 +22,8 @@ interface SetupScreenProps {
 
 export default function SetupScreen({ onStart }: SetupScreenProps) {
   const [hostName, setHostName] = useState('')
+  const [team1Name, setTeam1Name] = useState('')
+  const [team2Name, setTeam2Name] = useState('')
   const [gridSize, setGridSize] = useState<GridSize>(5)
   const [roundsToWin, setRoundsToWin] = useState<RoundsToWin>(2)
   const [team1Color, setTeam1Color] = useState('#34D399')
@@ -29,14 +31,14 @@ export default function SetupScreen({ onStart }: SetupScreenProps) {
 
   function handleStart(): void {
     if (!hostName.trim()) return
-    onStart({ gridSize, roundsToWin, hostName: hostName.trim(), team1Color, team2Color })
+    onStart({ gridSize, roundsToWin, hostName: hostName.trim(), team1Name: team1Name.trim(), team2Name: team2Name.trim(), team1Color, team2Color })
   }
 
   const title = hostName.trim() ? `حروف مع ${hostName.trim()}` : 'حروف'
 
   const teamRows = [
-    { key: 'team1', label: 'لون الفريق الأول', color: team1Color, conflict: team2Color, setColor: setTeam1Color },
-    { key: 'team2', label: 'لون الفريق الثاني', color: team2Color, conflict: team1Color, setColor: setTeam2Color },
+    { key: 'team1', nameLabel: 'اسم الفريق الأول', namePlaceholder: 'الفريق الأول', nameValue: team1Name, setName: setTeam1Name, colorLabel: 'لون الفريق الأول', color: team1Color, conflict: team2Color, setColor: setTeam1Color },
+    { key: 'team2', nameLabel: 'اسم الفريق الثاني', namePlaceholder: 'الفريق الثاني', nameValue: team2Name, setName: setTeam2Name, colorLabel: 'لون الفريق الثاني', color: team2Color, conflict: team1Color, setColor: setTeam2Color },
   ]
 
   return (
@@ -107,9 +109,17 @@ export default function SetupScreen({ onStart }: SetupScreenProps) {
           </div>
         </div>
 
-        {teamRows.map(({ key, label, color, conflict, setColor }) => (
+        {teamRows.map(({ key, nameLabel, namePlaceholder, nameValue, setName, colorLabel, color, conflict, setColor }) => (
           <div key={key} className="space-y-2">
-            <label className="text-text-primary font-semibold block">{label}</label>
+            <label className="text-text-primary font-semibold block">{nameLabel}</label>
+            <input
+              type="text"
+              value={nameValue}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={namePlaceholder}
+              className="bg-bg-surface border border-border-default rounded-lg px-4 py-3 text-text-primary placeholder:text-text-muted focus:border-accent-primary focus:outline-none transition-colors w-full text-right"
+            />
+            <label className="text-text-primary font-semibold block">{colorLabel}</label>
             <div className="flex gap-3 flex-wrap">
               {TEAM_COLORS.map((swatch) => {
                 const isSelected = color === swatch

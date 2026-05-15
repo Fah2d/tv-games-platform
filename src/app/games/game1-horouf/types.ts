@@ -62,6 +62,8 @@ export interface HoroufSettings {
   gridSize: GridSize
   roundsToWin: RoundsToWin
   hostName: string
+  team1Name: string
+  team2Name: string
   team1Color: string
   team2Color: string
 }

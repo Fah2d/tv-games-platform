@@ -39,32 +39,7 @@ export default function HexGrid({ grid, gridSize, teams, onCellClick, isWinRevea
   return (
     <div className="relative select-none" style={{ width: containerW, height: containerH }}>
 
-      {/* ── Corner triangles behind the grid ─────────────────────────────
-          team1 connects top↔bottom  →  top + bottom triangles
-          team2 connects left↔right  →  right + left triangles        */}
-
-      {/* team2 right triangle  (top-right corner)  */}
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{ clipPath: 'polygon(100% 0%, 100% 100%, 50% 50%)', backgroundColor: teams[1].color }}
-      />
-      {/* team2 left triangle   (bottom-left corner) */}
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{ clipPath: 'polygon(0% 0%, 0% 100%, 50% 50%)', backgroundColor: teams[1].color }}
-      />
-      {/* team1 top triangle    (top-left corner)    */}
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{ clipPath: 'polygon(0% 0%, 100% 0%, 50% 50%)', backgroundColor: teams[0].color }}
-      />
-      {/* team1 bottom triangle (bottom-right corner) */}
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{ clipPath: 'polygon(0% 100%, 100% 100%, 50% 50%)', backgroundColor: teams[0].color }}
-      />
-
-      {/* ── Hex cells (on top of triangles) ─────────────────────────── */}
+      {/* ── Hex cells ───────────────────────────────────────────────── */}
       <div className="absolute" style={{ top: PAD, left: PAD, width: totalWidth, height: totalHeight }}>
         {grid.map((row, rowIdx) =>
           row.map((cell, colIdx) => {

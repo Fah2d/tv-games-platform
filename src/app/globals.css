@@ -26,6 +26,44 @@
   50%       { opacity: 0.7; filter: brightness(1.6); }
 }
 
+@keyframes scale-fade-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounce-in {
+  0%   { opacity: 0; transform: scale(0.3); }
+  50%  { opacity: 1; transform: scale(1.05); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes bg-pulse {
+  0%, 100% { opacity: 0.03; }
+  50%       { opacity: 0.08; }
+}
+
+@utility animate-scale-fade-in {
+  animation: scale-fade-in 600ms ease-out both;
+}
+
+@utility animate-fade-in-up {
+  animation: fade-in-up 300ms ease-out both;
+}
+
+@utility animate-bounce-in {
+  animation: bounce-in 600ms ease-out both;
+}
+
+@utility animate-bg-pulse {
+  animation: bg-pulse 3s ease-in-out infinite;
+}
+
 :root {
   --background: #0A0A0F;
   --foreground: #F0F0F5;
