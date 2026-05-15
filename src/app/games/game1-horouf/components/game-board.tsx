@@ -72,19 +72,19 @@ export default function GameBoard({
             team1 connects top↔bottom  →  top + bottom triangles
             team2 connects left↔right  →  right + left triangles      */}
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 opacity-50"
           style={{ clipPath: 'polygon(100% 0%, 100% 100%, 50% 50%)', backgroundColor: teams[1].color }}
         />
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 opacity-50"
           style={{ clipPath: 'polygon(0% 0%, 0% 100%, 50% 50%)', backgroundColor: teams[1].color }}
         />
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 opacity-50"
           style={{ clipPath: 'polygon(0% 0%, 100% 0%, 50% 50%)', backgroundColor: teams[0].color }}
         />
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 opacity-50"
           style={{ clipPath: 'polygon(0% 100%, 100% 100%, 50% 50%)', backgroundColor: teams[0].color }}
         />
         <div className="relative z-10">

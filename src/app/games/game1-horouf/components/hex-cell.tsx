@@ -51,12 +51,12 @@ export default function HexCellComponent({
     )
   }
 
-  // Selected — gold fill
+  // Selected — vivid gold fill
   if (isSelected) {
     return (
       <div
         className={`flex items-center justify-center ${font} font-bold text-bg-primary cursor-pointer`}
-        style={{ width: w, height: h, clipPath: CLIP, backgroundColor: '#E8A838' }}
+        style={{ width: w, height: h, clipPath: CLIP, backgroundColor: '#F0B030' }}
         onClick={handleClick}
       >
         {letter}
@@ -72,11 +72,11 @@ export default function HexCellComponent({
       onClick={handleClick}
     >
       <div
-        className="absolute inset-0 bg-border-hover group-hover:bg-[#35354A] transition-colors"
+        className="absolute inset-0 bg-[#3A3F5C] group-hover:bg-[#4A4F70] transition-colors"
         style={{ clipPath: CLIP }}
       />
       <div
-        className={`absolute inset-[3px] bg-[#2A2A3A] flex items-center justify-center ${font} font-bold text-text-primary`}
+        className={`absolute inset-[3px] bg-[#1E2340] group-hover:bg-[#2A3058] flex items-center justify-center ${font} font-bold text-[#F0F0FF] transition-colors`}
         style={{ clipPath: CLIP }}
       >
         {letter}

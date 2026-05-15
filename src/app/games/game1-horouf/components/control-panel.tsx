@@ -33,7 +33,7 @@ export default function ControlPanel({
   const isEnabled = currentCell !== null
 
   return (
-    <div className="flex flex-col h-full p-6 gap-6 bg-bg-secondary border-l border-border-default">
+    <div className="flex flex-col h-full p-6 gap-6 bg-[#0F0F1A] border-l border-[#3A3F5C]">
       <div>
         <p className="text-text-muted text-sm">الجولة</p>
         <h2 className="text-xl font-bold text-text-primary">{ordinal}</h2>
