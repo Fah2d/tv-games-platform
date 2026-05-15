@@ -1,4 +1,5 @@
-[README (1).md](https://github.com/user-attachments/files/27806059/README.1.md)
+![Horouf Gameplay](https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExejV3M3Q2YjdlbHBianNtY3NqZTBuNDBnZ3Ryc2tkdTE5dmJxZ2t4YiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/0fz5uNPHnoVHLEhAW2/giphy.gif)
+
 # 🎮 TV Games Platform
 
 A Jackbox-style web platform where a host runs TV-show games on a main screen and players join from their phones as controllers.
