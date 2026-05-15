@@ -22,6 +22,43 @@ const GAMES = [
   },
 ]
 
+function HoroufThumbnail() {
+  return (
+    <svg width="72" height="82" viewBox="0 0 72 82" fill="none" aria-hidden="true">
+      <path
+        d="M36 4L68 22V58L36 76L4 58V22L36 4Z"
+        fill="#E8A838"
+        fillOpacity="0.12"
+        stroke="#E8A838"
+        strokeWidth="1.5"
+        strokeOpacity="0.6"
+      />
+      <text
+        x="36"
+        y="41"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#E8A838"
+        fontSize="28"
+        fontWeight="700"
+        fontFamily="IBM Plex Sans Arabic, sans-serif"
+      >
+        ح
+      </text>
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <rect x="10" y="18" width="20" height="16" rx="3" stroke="#606070" strokeWidth="1.5" />
+      <path d="M14 18v-4a6 6 0 0112 0v4" stroke="#606070" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="20" cy="26" r="2" fill="#606070" />
+    </svg>
+  )
+}
+
 export default function HubPage() {
   const { user, loading, signOut } = useAuth()
   const router = useRouter()
@@ -32,28 +69,28 @@ export default function HubPage() {
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-bg-primary">
+        <div className="w-8 h-8 border-2 border-accent-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 p-6 md:p-10">
-      <header className="flex items-center justify-between mb-12 max-w-5xl mx-auto">
-        <h1 className="text-3xl font-bold text-white">منصة الألعاب</h1>
+    <div className="min-h-screen bg-bg-primary px-6 py-8">
+      <header className="flex items-center justify-between mb-12 max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold text-text-primary">اختر لعبة</h1>
         <div className="flex items-center gap-4">
-          <span className="text-zinc-500 text-sm hidden sm:block">{user.email}</span>
+          <span className="text-text-muted text-sm hidden sm:block">{user.email}</span>
           <button
             onClick={signOut}
-            className="text-sm bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg transition-colors"
+            className="text-sm bg-transparent border border-border-default text-text-primary px-4 py-2 rounded-lg hover:border-border-hover hover:bg-bg-tertiary transition-colors"
           >
             خروج
           </button>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto">
+      <main className="max-w-6xl mx-auto">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {GAMES.map((game) => (
             <GameCard key={game.id} game={game} />
@@ -65,31 +102,40 @@ export default function HubPage() {
 }
 
 function GameCard({ game }: { game: (typeof GAMES)[0] }) {
-  return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-colors">
-      <div className="aspect-video bg-zinc-800 flex items-center justify-center">
-        <span className="text-5xl">{game.available ? '🎮' : '🔒'}</span>
+  const card = (
+    <div
+      className={`bg-bg-secondary border border-border-default rounded-xl overflow-hidden transition-all ${
+        game.available
+          ? 'hover:border-border-hover hover:bg-bg-tertiary cursor-pointer'
+          : 'opacity-60'
+      }`}
+    >
+      <div className="h-36 bg-bg-tertiary flex items-center justify-center">
+        {game.available ? <HoroufThumbnail /> : <LockIcon />}
       </div>
-      <div className="p-5">
-        <h2 className="text-xl font-bold text-white mb-1">{game.name}</h2>
-        <p className="text-zinc-400 text-sm mb-1">{game.description}</p>
-        <p className="text-zinc-600 text-xs mb-5">اللاعبون: {game.players}</p>
+      <div className="p-6">
+        <h2 className="text-lg font-semibold text-text-primary mb-1">{game.name}</h2>
+        <p className="text-text-secondary text-sm mb-1">{game.description}</p>
+        <p className="text-text-muted text-sm mb-5">اللاعبون: {game.players}</p>
         {game.available ? (
-          <Link
-            href={`/games/${game.id}`}
-            className="block w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition-colors"
-          >
+          <div className="bg-accent-primary text-bg-primary font-semibold px-6 py-3 rounded-lg text-center text-base hover:bg-accent-hover transition-colors">
             العب الآن
-          </Link>
+          </div>
         ) : (
-          <button
-            disabled
-            className="w-full text-center bg-zinc-800 text-zinc-600 font-semibold py-2.5 rounded-xl cursor-not-allowed"
-          >
+          <div className="border border-border-default text-text-muted font-semibold px-6 py-3 rounded-lg text-center text-base cursor-not-allowed">
             قريباً
-          </button>
+          </div>
         )}
       </div>
     </div>
   )
+
+  if (game.available) {
+    return (
+      <Link href={`/games/${game.id}`} className="block">
+        {card}
+      </Link>
+    )
+  }
+  return card
 }
