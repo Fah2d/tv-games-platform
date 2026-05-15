@@ -72,11 +72,11 @@ export default function HexCellComponent({
       onClick={handleClick}
     >
       <div
-        className="absolute inset-0 bg-border-default group-hover:bg-border-hover transition-colors"
+        className="absolute inset-0 bg-border-hover group-hover:bg-[#35354A] transition-colors"
         style={{ clipPath: CLIP }}
       />
       <div
-        className={`absolute inset-[3px] bg-bg-surface flex items-center justify-center ${font} font-bold text-text-primary`}
+        className={`absolute inset-[3px] bg-[#2A2A3A] flex items-center justify-center ${font} font-bold text-text-primary`}
         style={{ clipPath: CLIP }}
       >
         {letter}

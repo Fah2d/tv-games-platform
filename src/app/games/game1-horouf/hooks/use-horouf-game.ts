@@ -267,6 +267,12 @@ export function useHoroufGame() {
     const round = gameState.currentRound
     if (!round || gameState.phase !== 'playing') return
 
+    // Clicking the already-selected cell deselects it — no question consumed.
+    if (round.currentCell?.id === cellId) {
+      dispatch({ type: 'SELECT_CELL', payload: { cellId, question: null } })
+      return
+    }
+
     // Find the cell's letter so we can look up a question.
     let targetLetter = ''
     for (const gridRow of round.grid) {

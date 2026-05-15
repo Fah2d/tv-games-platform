@@ -122,8 +122,14 @@ export function getRandomQuestion(letter: string, excludeIds: string[]): Questio
   const pool = QUESTION_BANK[letter]
   if (!pool || pool.length === 0) return null
 
-  const available = pool.filter((q) => !excludeIds.includes(q.id))
-  if (available.length === 0) return null
+  let available = pool.filter((q) => !excludeIds.includes(q.id))
+
+  // All questions for this letter used — cycle, only excluding the last shown one.
+  if (available.length === 0) {
+    const lastId = excludeIds[excludeIds.length - 1]
+    available = pool.filter((q) => q.id !== lastId)
+    if (available.length === 0) available = pool
+  }
 
   return available[Math.floor(Math.random() * available.length)]
 }
