@@ -9,8 +9,8 @@ const GAMES = [
   {
     id: 'game1-horouf',
     name: 'حروف',
-    description: 'لعبة الحروف والكلمات',
-    players: '٢-١٠',
+    description: 'لعبة حروف التريفيا',
+    players: '٢ فريق',
     available: true,
   },
   {
@@ -116,7 +116,7 @@ function GameCard({ game }: { game: (typeof GAMES)[0] }) {
       <div className="p-6">
         <h2 className="text-lg font-semibold text-text-primary mb-1">{game.name}</h2>
         <p className="text-text-secondary text-sm mb-1">{game.description}</p>
-        <p className="text-text-muted text-sm mb-5">اللاعبون: {game.players}</p>
+        <p className="text-text-muted text-sm mb-5">{game.players}</p>
         {game.available ? (
           <div className="bg-accent-primary text-bg-primary font-semibold px-6 py-3 rounded-lg text-center text-base hover:bg-accent-hover transition-colors">
             العب الآن

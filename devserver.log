@@ -1,0 +1,12 @@
+
+> tv-games-platform@0.1.0 dev
+> tsx server.ts
+
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          17040
+- Dir:          C:\Users\Admin\tv-games-platform
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 17040 /F to stop it.
