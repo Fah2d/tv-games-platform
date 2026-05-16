@@ -12,6 +12,7 @@ interface ControlPanelProps {
   roundNumber: number
   currentCell: HexCell | null
   currentQuestion: Question | null
+  isLoadingQuestion: boolean
   showAnswer: boolean
   teams: [TeamConfig, TeamConfig]
   onShowAnswer: () => void
@@ -23,6 +24,7 @@ export default function ControlPanel({
   roundNumber,
   currentCell,
   currentQuestion,
+  isLoadingQuestion,
   showAnswer,
   teams,
   onShowAnswer,
@@ -43,6 +45,7 @@ export default function ControlPanel({
         <QuestionCard
           currentCell={currentCell}
           currentQuestion={currentQuestion}
+          isLoadingQuestion={isLoadingQuestion}
           showAnswer={showAnswer}
           onShowAnswer={onShowAnswer}
           onNewQuestion={onNewQuestion}

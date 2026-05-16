@@ -43,6 +43,7 @@ export interface RoundState {
   grid: HexCell[][]            // grid[row][col]
   currentCell: HexCell | null  // cell the host has selected
   currentQuestion: Question | null
+  isLoadingQuestion: boolean
   showAnswer: boolean
   winner: TeamId | null        // set when a team wins this round
   winningPath: string[]        // cell IDs forming the winning connection

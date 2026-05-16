@@ -24,7 +24,8 @@ import { getRandomQuestion } from '../utils/questions'
 type HoroufAction =
   | { type: 'INIT_GAME'; payload: HoroufSettings }
   | { type: 'START_ROUND' }
-  | { type: 'SELECT_CELL'; payload: { cellId: string; question: Question | null } }
+  | { type: 'SELECT_CELL'; payload: { cellId: string } }
+  | { type: 'SET_QUESTION'; payload: { question: Question } }
   | { type: 'NEW_QUESTION'; payload: { question: Question } }
   | { type: 'SHOW_ANSWER' }
   | { type: 'AWARD_POINT'; payload: { teamId: TeamId } }
@@ -81,6 +82,7 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
         grid: generateGrid(state.gridSize),
         currentCell: null,
         currentQuestion: null,
+        isLoadingQuestion: false,
         showAnswer: false,
         winner: null,
         winningPath: [],
@@ -89,7 +91,7 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
     }
 
     case 'SELECT_CELL': {
-      const { cellId, question } = action.payload
+      const { cellId } = action.payload
       const round = state.currentRound
       if (!round || state.phase !== 'playing') return state
 
@@ -107,6 +109,7 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
             grid: newGrid,
             currentCell: null,
             currentQuestion: null,
+            isLoadingQuestion: false,
             showAnswer: false,
           },
         }
@@ -141,7 +144,22 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
           ...round,
           grid: newGrid,
           currentCell: selectedCell,
-          currentQuestion: question,
+          currentQuestion: null,
+          isLoadingQuestion: true,
+          showAnswer: false,
+        },
+      }
+    }
+
+    case 'SET_QUESTION': {
+      const round = state.currentRound
+      if (!round) return state
+      return {
+        ...state,
+        currentRound: {
+          ...round,
+          currentQuestion: action.payload.question,
+          isLoadingQuestion: false,
           showAnswer: false,
         },
       }
@@ -155,6 +173,7 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
         currentRound: {
           ...round,
           currentQuestion: action.payload.question,
+          isLoadingQuestion: false,
           showAnswer: false,
         },
       }
@@ -190,6 +209,7 @@ function horoufReducer(state: HoroufGameState, action: HoroufAction): HoroufGame
         grid: newGrid,
         currentCell: null,
         currentQuestion: null,
+        isLoadingQuestion: false,
         showAnswer: false,
       }
 
@@ -263,13 +283,13 @@ export function useHoroufGame() {
     dispatch({ type: 'START_ROUND' })
   }
 
-  function selectCell(cellId: string): void {
+  async function selectCell(cellId: string): Promise<void> {
     const round = gameState.currentRound
     if (!round || gameState.phase !== 'playing') return
 
     // Clicking the already-selected cell deselects it — no question consumed.
     if (round.currentCell?.id === cellId) {
-      dispatch({ type: 'SELECT_CELL', payload: { cellId, question: null } })
+      dispatch({ type: 'SELECT_CELL', payload: { cellId } })
       return
     }
 
@@ -286,26 +306,66 @@ export function useHoroufGame() {
     }
     if (!targetLetter) return
 
-    const question = getRandomQuestion(targetLetter, usedQuestionIds.current)
-    if (question) {
-      usedQuestionIds.current = [...usedQuestionIds.current, question.id]
-    }
+    // Highlight cell and show loading state immediately.
+    dispatch({ type: 'SELECT_CELL', payload: { cellId } })
 
-    dispatch({ type: 'SELECT_CELL', payload: { cellId, question } })
+    const excludeIds = usedQuestionIds.current
+    try {
+      const response = await fetch(
+        `/api/questions/random?letter=${encodeURIComponent(targetLetter)}&gameId=horouf&excludeIds=${excludeIds.join(',')}`
+      )
+      if (response.ok) {
+        const question = await response.json()
+        // Map MongoDB _id to id for compatibility with the Question type.
+        const normalized = { ...question, id: question._id ?? question.id }
+        usedQuestionIds.current = [...usedQuestionIds.current, normalized.id]
+        dispatch({ type: 'SET_QUESTION', payload: { question: normalized } })
+      } else {
+        const fallback = getRandomQuestion(targetLetter, excludeIds)
+        if (fallback) {
+          usedQuestionIds.current = [...usedQuestionIds.current, fallback.id]
+          dispatch({ type: 'SET_QUESTION', payload: { question: fallback } })
+        }
+      }
+    } catch {
+      const fallback = getRandomQuestion(targetLetter, excludeIds)
+      if (fallback) {
+        usedQuestionIds.current = [...usedQuestionIds.current, fallback.id]
+        dispatch({ type: 'SET_QUESTION', payload: { question: fallback } })
+      }
+    }
   }
 
-  function newQuestion(): void {
+  async function newQuestion(): Promise<void> {
     const round = gameState.currentRound
     if (!round || !round.currentCell) return
 
     const letter = round.currentCell.letter
-    const question = getRandomQuestion(letter, usedQuestionIds.current)
+    const excludeIds = usedQuestionIds.current
 
-    // No more questions for this letter — keep the current one rather than crashing.
-    if (!question) return
-
-    usedQuestionIds.current = [...usedQuestionIds.current, question.id]
-    dispatch({ type: 'NEW_QUESTION', payload: { question } })
+    try {
+      const response = await fetch(
+        `/api/questions/random?letter=${encodeURIComponent(letter)}&gameId=horouf&excludeIds=${excludeIds.join(',')}`
+      )
+      if (response.ok) {
+        const question = await response.json()
+        const normalized = { ...question, id: question._id ?? question.id }
+        usedQuestionIds.current = [...usedQuestionIds.current, normalized.id]
+        dispatch({ type: 'NEW_QUESTION', payload: { question: normalized } })
+      } else {
+        const fallback = getRandomQuestion(letter, excludeIds)
+        if (fallback) {
+          usedQuestionIds.current = [...usedQuestionIds.current, fallback.id]
+          dispatch({ type: 'NEW_QUESTION', payload: { question: fallback } })
+        }
+      }
+    } catch {
+      const fallback = getRandomQuestion(letter, excludeIds)
+      if (fallback) {
+        usedQuestionIds.current = [...usedQuestionIds.current, fallback.id]
+        dispatch({ type: 'NEW_QUESTION', payload: { question: fallback } })
+      }
+    }
   }
 
   function showAnswer(): void {

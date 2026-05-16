@@ -1,7 +1,8 @@
 let audioContext: AudioContext | null = null
 let muted = false
 
-function getAudioContext(): AudioContext {
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null
   if (!audioContext) {
     audioContext = new window.AudioContext()
   }
@@ -18,8 +19,9 @@ function playTone(
   volume = 0.3,
   startDelay = 0,
 ): void {
-  if (muted || typeof window === 'undefined') return
+  if (muted) return
   const ctx = getAudioContext()
+  if (!ctx) return
   const osc = ctx.createOscillator()
   const gain = ctx.createGain()
   const t = ctx.currentTime + startDelay

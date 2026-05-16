@@ -58,6 +58,7 @@ export default function GameBoard({
           roundNumber={round.roundNumber}
           currentCell={round.currentCell}
           currentQuestion={round.currentQuestion}
+          isLoadingQuestion={round.isLoadingQuestion}
           showAnswer={round.showAnswer}
           teams={teams}
           onShowAnswer={onShowAnswer}

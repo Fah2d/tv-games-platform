@@ -5,6 +5,7 @@ import type { HexCell, Question } from '../types'
 interface QuestionCardProps {
   currentCell: HexCell | null
   currentQuestion: Question | null
+  isLoadingQuestion: boolean
   showAnswer: boolean
   onShowAnswer: () => void
   onNewQuestion: () => void
@@ -13,11 +14,34 @@ interface QuestionCardProps {
 export default function QuestionCard({
   currentCell,
   currentQuestion,
+  isLoadingQuestion,
   showAnswer,
   onShowAnswer,
   onNewQuestion,
 }: QuestionCardProps) {
-  if (!currentCell || !currentQuestion) {
+  if (!currentCell) {
+    return (
+      <div className="bg-[#181830] border border-[#3A3F5C] rounded-xl p-6 flex flex-col items-center justify-center min-h-[260px] gap-4">
+        <div className="w-10 h-10 rounded-xl border border-[#3A3F5C] flex items-center justify-center text-text-muted text-lg">
+          ؟
+        </div>
+        <p className="text-text-muted text-lg text-center">اختر حرفًا لإظهار السؤال</p>
+      </div>
+    )
+  }
+
+  if (isLoadingQuestion) {
+    return (
+      <div className="bg-[#181830] border border-[#3A3F5C] rounded-xl p-6 flex flex-col items-center justify-center min-h-[260px] gap-4">
+        <div className="w-12 h-12 rounded-full bg-accent-primary flex items-center justify-center text-xl font-bold text-bg-primary shadow-[0_0_16px_rgba(240,176,48,0.45)]">
+          {currentCell.letter}
+        </div>
+        <p className="text-text-muted text-lg text-center animate-pulse">جاري تحميل السؤال...</p>
+      </div>
+    )
+  }
+
+  if (!currentQuestion) {
     return (
       <div className="bg-[#181830] border border-[#3A3F5C] rounded-xl p-6 flex flex-col items-center justify-center min-h-[260px] gap-4">
         <div className="w-10 h-10 rounded-xl border border-[#3A3F5C] flex items-center justify-center text-text-muted text-lg">
