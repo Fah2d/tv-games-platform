@@ -7,11 +7,18 @@ import { useAuth } from '@/shared/hooks/use-auth'
 
 const GAMES = [
   {
+    id: 'family-feud',
+    name: 'عائلة فيود',
+    description: 'لعبة التنافس العائلي — فريقان، أسئلة، وإجابات شعبية',
+    players: '٢-٢٠',
+    available: true,
+  },
+  {
     id: 'game1-horouf',
     name: 'حروف',
     description: 'لعبة الحروف والكلمات',
     players: '٢-١٠',
-    available: true,
+    available: false,
   },
   {
     id: 'game2-tbd',
