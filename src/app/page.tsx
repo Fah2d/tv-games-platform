@@ -10,7 +10,7 @@ const GAMES = [
     id: 'game1-horouf',
     name: 'حروف',
     description: 'لعبة الحروف والكلمات',
-    players: '٢-١٠',
+    players: '٢ فريق',
     available: true,
   },
   {
