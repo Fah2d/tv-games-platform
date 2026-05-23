@@ -10,14 +10,6 @@ const GAMES = [
     available: true,
   },
   {
-    id: 'game1-horouf',
-    name: 'حروف',
-    description: 'لعبة الحروف والكلمات',
-    players: '٢-١٠',
-    emoji: '🔤',
-    available: true,
-  },
-  {
     id: 'speed-challenge',
     name: 'التحدي السريع',
     description: 'تحديات سريعة — أول واحد يكملها يكسب!',
