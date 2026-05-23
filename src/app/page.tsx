@@ -25,6 +25,14 @@ const GAMES = [
     emoji: '🔤',
     available: true,
   },
+  {
+    id: 'speed-challenge',
+    name: 'التحدي السريع',
+    description: 'تحديات سريعة — أول واحد يكملها يكسب!',
+    players: '٢-٨',
+    emoji: '⚡',
+    available: true,
+  },
 ]
 
 export default function HubPage() {

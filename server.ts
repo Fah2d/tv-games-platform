@@ -9,6 +9,9 @@ import {
   FASTEST_CREATE, FASTEST_HOST_RECONNECT, FASTEST_RECONNECT,
   FASTEST_STATE, FASTEST_ERROR, FASTEST_START, FASTEST_BUZZ,
   FASTEST_HOST_AWARD, FASTEST_HOST_NEXT, FASTEST_HOST_END, FASTEST_HOST_RESTART,
+  SPEED_CREATE, SPEED_HOST_RECONNECT, SPEED_RECONNECT,
+  SPEED_STATE, SPEED_ERROR, SPEED_START,
+  SPEED_HOST_AWARD, SPEED_HOST_NEXT, SPEED_HOST_END, SPEED_HOST_RESTART,
 } from './src/shared/socket/events'
 import { getRandomWord } from './src/app/games/impostor/words'
 import type {
@@ -17,6 +20,10 @@ import type {
 import type {
   FastestPhase, FastestPlayer, FastestSettings, FastestStatePayload,
 } from './src/app/games/fastest/types'
+import type {
+  SpeedPhase, SpeedPlayer, SpeedSettings, SpeedStatePayload, SpeedChallenge,
+} from './src/app/games/speed-challenge/types'
+import { buildChallengePool } from './src/app/games/speed-challenge/challenges'
 
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -247,6 +254,106 @@ function advanceFastestQuestion(io: SocketIOServer, gs: FastestGameState, points
   emitFastestState(io, gs)
 }
 
+// ─── Speed Challenge game state (server-side) ────────────────────────────────
+
+interface SpeedGameState {
+  roomCode: string
+  hostSocketId: string
+  phase: SpeedPhase
+  settings: SpeedSettings
+  players: SpeedPlayer[]
+  currentRound: number
+  countdownValue: number | null
+  challengePool: SpeedChallenge[]
+  usedChallengeIndices: Set<number>
+  currentChallenge: SpeedChallenge | null
+  lastWinnerName: string | null
+  winner: string | null
+}
+
+const speedTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function clearSpeedTimer(roomCode: string) {
+  const t = speedTimers.get(roomCode)
+  if (t) { clearTimeout(t); speedTimers.delete(roomCode) }
+}
+
+function buildSpeedPayload(gs: SpeedGameState): SpeedStatePayload {
+  return {
+    roomCode: gs.roomCode,
+    phase: gs.phase,
+    settings: gs.settings,
+    players: gs.players,
+    currentRound: gs.currentRound,
+    countdownValue: gs.countdownValue,
+    currentChallenge: gs.currentChallenge,
+    lastWinnerName: gs.lastWinnerName,
+    winner: gs.winner,
+  }
+}
+
+function emitSpeedState(io: SocketIOServer, gs: SpeedGameState) {
+  io.to(gs.roomCode).emit(SPEED_STATE, buildSpeedPayload(gs))
+}
+
+function pickNextChallenge(gs: SpeedGameState): SpeedChallenge | null {
+  const available = gs.challengePool
+    .map((c, i) => ({ c, i }))
+    .filter(({ i }) => !gs.usedChallengeIndices.has(i))
+  if (available.length === 0) {
+    // Exhausted pool — reset used set and try again
+    gs.usedChallengeIndices = new Set()
+    const all = gs.challengePool.map((c, i) => ({ c, i }))
+    if (all.length === 0) return null
+    const pick = all[Math.floor(Math.random() * all.length)]
+    gs.usedChallengeIndices.add(pick.i)
+    return pick.c
+  }
+  const pick = available[Math.floor(Math.random() * available.length)]
+  gs.usedChallengeIndices.add(pick.i)
+  return pick.c
+}
+
+function runSpeedCountdown(io: SocketIOServer, gs: SpeedGameState, value: number) {
+  clearSpeedTimer(gs.roomCode)
+  gs.phase = 'countdown'
+  gs.countdownValue = value
+  emitSpeedState(io, gs)
+  speedTimers.set(gs.roomCode, setTimeout(() => {
+    if (gs.phase !== 'countdown') return
+    if (value > 1) {
+      runSpeedCountdown(io, gs, value - 1)
+    } else {
+      gs.currentChallenge = pickNextChallenge(gs)
+      gs.phase = 'challenge'
+      gs.countdownValue = null
+      emitSpeedState(io, gs)
+    }
+  }, 1000))
+}
+
+function advanceSpeedRound(io: SocketIOServer, gs: SpeedGameState, winnerName: string | null) {
+  clearSpeedTimer(gs.roomCode)
+  if (winnerName) {
+    const p = gs.players.find((pl) => pl.name === winnerName)
+    if (p) p.score++
+    gs.lastWinnerName = winnerName
+  } else {
+    gs.lastWinnerName = null
+  }
+
+  gs.currentRound++
+  if (gs.currentRound > gs.settings.totalRounds) {
+    gs.phase = 'finished'
+    const sorted = [...gs.players].sort((a, b) => b.score - a.score)
+    gs.winner = sorted[0]?.name ?? null
+    gs.currentChallenge = null
+    emitSpeedState(io, gs)
+  } else {
+    runSpeedCountdown(io, gs, 3)
+  }
+}
+
 // ─── Shared helper ────────────────────────────────────────────────────────────
 
 function generateCode(existing: Map<string, unknown>): string {
@@ -269,6 +376,7 @@ app.prepare().then(() => {
   const rooms = new Map<string, Room>()
   const impRooms = new Map<string, ImpGameState>()
   const fastestRooms = new Map<string, FastestGameState>()
+  const speedRooms = new Map<string, SpeedGameState>()
 
   io.on('connection', (socket) => {
 
@@ -576,6 +684,121 @@ app.prepare().then(() => {
     })
 
     // ═══════════════════════════════════════════════════════════
+    // Speed Challenge — room
+    // ═══════════════════════════════════════════════════════════
+
+    function assertSpeedHost(roomCode: string): SpeedGameState | null {
+      const gs = speedRooms.get(roomCode)
+      if (!gs || gs.hostSocketId !== socket.id) return null
+      return gs
+    }
+
+    socket.on(SPEED_CREATE, ({ settings: raw }: { settings: SpeedSettings }) => {
+      const totalRounds = [5, 10, 15, 20].includes(raw.totalRounds) ? raw.totalRounds : 10
+      const selectedCategories = Array.isArray(raw.selectedCategories) && raw.selectedCategories.length > 0
+        ? raw.selectedCategories
+        : ['physical', 'vocal', 'thinking', 'creative', 'emoji']
+
+      const s: SpeedSettings = { totalRounds, selectedCategories }
+      const code = generateCode(speedRooms)
+      const challengePool = buildChallengePool(selectedCategories)
+      const gs: SpeedGameState = {
+        roomCode: code, hostSocketId: socket.id, phase: 'lobby',
+        settings: s, players: [], currentRound: 1,
+        countdownValue: null, challengePool, usedChallengeIndices: new Set(),
+        currentChallenge: null, lastWinnerName: null, winner: null,
+      }
+      speedRooms.set(code, gs)
+      socket.join(code)
+      socket.emit('SPEED_ROOM_CREATED', { roomCode: code })
+      socket.emit(SPEED_STATE, buildSpeedPayload(gs))
+    })
+
+    socket.on(SPEED_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
+      const gs = speedRooms.get(roomCode)
+      if (!gs) { socket.emit(SPEED_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      gs.hostSocketId = socket.id
+      socket.join(roomCode)
+      socket.emit(SPEED_STATE, buildSpeedPayload(gs))
+    })
+
+    socket.on(SPEED_RECONNECT, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const gs = speedRooms.get(roomCode)
+      if (!gs) { socket.emit(SPEED_ERROR, { message: 'رمز الغرفة غير صحيح' }); return }
+
+      const existing = gs.players.find((p) => p.name === playerName)
+      if (existing) {
+        existing.socketId = socket.id; existing.id = socket.id
+        socket.join(roomCode)
+        socket.emit(SPEED_STATE, buildSpeedPayload(gs))
+      } else {
+        if (gs.phase !== 'lobby') { socket.emit(SPEED_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
+        if (gs.players.length >= 8) { socket.emit(SPEED_ERROR, { message: 'الغرفة ممتلئة' }); return }
+        const colorIndex = gs.players.length % 8
+        gs.players.push({ id: socket.id, socketId: socket.id, name: playerName, score: 0, colorIndex })
+        socket.join(roomCode)
+        emitSpeedState(io, gs)
+      }
+    })
+
+    // ═══════════════════════════════════════════════════════════
+    // Speed Challenge — game
+    // ═══════════════════════════════════════════════════════════
+
+    socket.on(SPEED_START, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      if (gs.phase !== 'lobby') return
+      if (gs.players.length < 1) { socket.emit(SPEED_ERROR, { message: 'لا يوجد لاعبون في الغرفة' }); return }
+      gs.currentRound = 1
+      gs.lastWinnerName = null
+      gs.winner = null
+      runSpeedCountdown(io, gs, 3)
+    })
+
+    socket.on(SPEED_HOST_AWARD, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+
+      // '__select' is a sentinel meaning: switch to selecting phase so host can pick a player
+      if (playerName === '__select') {
+        if (gs.phase !== 'challenge') return
+        gs.phase = 'selecting'
+        emitSpeedState(io, gs)
+        return
+      }
+
+      if (gs.phase !== 'selecting') return
+      advanceSpeedRound(io, gs, playerName)
+    })
+
+    socket.on(SPEED_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      if (gs.phase !== 'challenge' && gs.phase !== 'selecting') return
+      advanceSpeedRound(io, gs, null)
+    })
+
+    socket.on(SPEED_HOST_END, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      clearSpeedTimer(roomCode)
+      gs.phase = 'finished'
+      gs.currentChallenge = null
+      const sorted = [...gs.players].sort((a, b) => b.score - a.score)
+      gs.winner = sorted[0]?.name ?? null
+      emitSpeedState(io, gs)
+    })
+
+    socket.on(SPEED_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      clearSpeedTimer(roomCode)
+      for (const p of gs.players) p.score = 0
+      gs.currentRound = 1
+      gs.lastWinnerName = null
+      gs.winner = null
+      gs.currentChallenge = null
+      gs.usedChallengeIndices = new Set()
+      runSpeedCountdown(io, gs, 3)
+    })
+
+    // ═══════════════════════════════════════════════════════════
     // Disconnect / leave
     // ═══════════════════════════════════════════════════════════
 
@@ -583,6 +806,7 @@ app.prepare().then(() => {
       handleLeave(socket.id, rooms, io)
       handleImpLeave(socket.id, impRooms, io)
       handleFastestLeave(socket.id, fastestRooms)
+      handleSpeedLeave(socket.id, speedRooms)
     })
   })
 
@@ -627,5 +851,12 @@ function handleFastestLeave(socketId: string, fastestRooms: Map<string, FastestG
   for (const gs of fastestRooms.values()) {
     if (gs.hostSocketId === socketId) { gs.hostSocketId = ''; continue }
     // Players keep their slot on disconnect — they can reconnect and their score is preserved
+  }
+}
+
+function handleSpeedLeave(socketId: string, speedRooms: Map<string, SpeedGameState>) {
+  for (const gs of speedRooms.values()) {
+    if (gs.hostSocketId === socketId) { gs.hostSocketId = ''; continue }
+    // Players keep their slot on disconnect — score is preserved
   }
 }

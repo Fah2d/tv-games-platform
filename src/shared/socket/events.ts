@@ -73,3 +73,20 @@ export const FASTEST_HOST_AWARD = 'FASTEST_HOST_AWARD' as const
 export const FASTEST_HOST_NEXT = 'FASTEST_HOST_NEXT' as const
 export const FASTEST_HOST_END = 'FASTEST_HOST_END' as const
 export const FASTEST_HOST_RESTART = 'FASTEST_HOST_RESTART' as const
+
+// Speed Challenge (لعبة التحدي السريع) — room lifecycle
+export const SPEED_CREATE = 'SPEED_CREATE' as const
+export const SPEED_JOIN = 'SPEED_JOIN' as const
+export const SPEED_HOST_RECONNECT = 'SPEED_HOST_RECONNECT' as const
+export const SPEED_RECONNECT = 'SPEED_RECONNECT' as const
+export const SPEED_STATE = 'SPEED_STATE' as const
+export const SPEED_ERROR = 'SPEED_ERROR' as const
+
+// Speed Challenge — game flow
+export const SPEED_START = 'SPEED_START' as const
+
+// Speed Challenge — host controls
+export const SPEED_HOST_AWARD = 'SPEED_HOST_AWARD' as const
+export const SPEED_HOST_NEXT = 'SPEED_HOST_NEXT' as const
+export const SPEED_HOST_END = 'SPEED_HOST_END' as const
+export const SPEED_HOST_RESTART = 'SPEED_HOST_RESTART' as const
