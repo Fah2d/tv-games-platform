@@ -8,12 +8,13 @@ import {
   SPEED_START, SPEED_HOST_AWARD, SPEED_HOST_NEXT,
   SPEED_HOST_END, SPEED_HOST_RESTART,
 } from '@/shared/socket/events'
-import type { SpeedStatePayload } from '../types'
+import type { SpeedStatePayload, SpeedPhase } from '../types'
 import { PLAYER_COLOR_CLASSES } from '../types'
 import ChallengeDisplay from '../components/ChallengeDisplay'
 import CountdownTimer from '../components/CountdownTimer'
 import WinnerButtons from '../components/WinnerButtons'
 import ScoreBoard from '../components/ScoreBoard'
+import sounds from '@/lib/sounds'
 
 function GameBoardContent() {
   const searchParams = useSearchParams()
@@ -22,6 +23,8 @@ function GameBoardContent() {
   const [state, setState] = useState<SpeedStatePayload | null>(null)
   const [error, setError] = useState('')
   const socketRef = useRef<Socket | null>(null)
+  const prevPhaseRef = useRef<SpeedPhase | null>(null)
+  const prevCountdownRef = useRef<number | null>(null)
 
   const emit = useCallback(
     (event: string, data: object = {}) => socketRef.current?.emit(event, { roomCode: code, ...data }),
@@ -33,7 +36,39 @@ function GameBoardContent() {
     const socket = io()
     socketRef.current = socket
     socket.on('connect', () => socket.emit(SPEED_HOST_RECONNECT, { roomCode: code }))
-    socket.on(SPEED_STATE, (s: SpeedStatePayload) => setState(s))
+    socket.on(SPEED_STATE, (s: SpeedStatePayload) => {
+      setState((prev) => {
+        const prevPhase = prev?.phase ?? null
+        const prevCountdown = prev?.countdownValue ?? null
+
+        // Countdown ticks
+        if (s.phase === 'countdown' && s.countdownValue !== null) {
+          if (s.countdownValue !== prevCountdown) {
+            if (s.countdownValue === 1) sounds.countdownFinal()
+            else sounds.countdownTick()
+          }
+        }
+
+        // Challenge just appeared
+        if (s.phase === 'challenge' && prevPhase === 'countdown') {
+          sounds.challengeStart()
+        }
+
+        // Winner selected (selecting → challenge means next round started)
+        if (s.phase === 'countdown' && prevPhase === 'selecting') {
+          sounds.winner()
+        }
+
+        // Game finished
+        if (s.phase === 'finished' && prevPhase !== 'finished') {
+          sounds.gameOver()
+        }
+
+        prevPhaseRef.current = s.phase
+        prevCountdownRef.current = s.countdownValue
+        return s
+      })
+    })
     socket.on(SPEED_ERROR, ({ message }: { message: string }) => setError(message))
     return () => { socket.disconnect() }
   }, [code])
@@ -214,7 +249,7 @@ function GameBoardContent() {
         <WinnerButtons
           players={players}
           onAward={(playerName) => emit(SPEED_HOST_AWARD, { playerName })}
-          onSkip={() => emit(SPEED_HOST_NEXT)}
+          onSkip={() => { sounds.skip(); emit(SPEED_HOST_NEXT) }}
         />
       )}
 
@@ -223,7 +258,7 @@ function GameBoardContent() {
         <div className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t-4 border-yellow-500 px-4 py-3 z-40">
           <div className="max-w-4xl mx-auto flex gap-3 justify-center">
             <button
-              onClick={() => emit(SPEED_HOST_NEXT)}
+              onClick={() => { sounds.skip(); emit(SPEED_HOST_NEXT) }}
               className="px-6 py-3 bg-zinc-700 hover:bg-zinc-600 text-white font-bold rounded-2xl transition-colors"
             >
               ⏭ تخطّي
