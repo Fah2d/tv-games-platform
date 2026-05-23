@@ -6,9 +6,6 @@ import {
   IMP_CREATE, IMP_JOIN, IMP_HOST_RECONNECT, IMP_RECONNECT,
   IMP_STATE, IMP_ERROR, IMP_WORD, IMP_START, IMP_VOTE,
   IMP_HOST_START_VOTING, IMP_HOST_NEXT, IMP_HOST_END, IMP_HOST_RESTART,
-  FASTEST_CREATE, FASTEST_HOST_RECONNECT, FASTEST_RECONNECT,
-  FASTEST_STATE, FASTEST_ERROR, FASTEST_START, FASTEST_BUZZ,
-  FASTEST_HOST_AWARD, FASTEST_HOST_NEXT, FASTEST_HOST_END, FASTEST_HOST_RESTART,
   SPEED_CREATE, SPEED_HOST_RECONNECT, SPEED_RECONNECT,
   SPEED_STATE, SPEED_ERROR, SPEED_START,
   SPEED_HOST_AWARD, SPEED_HOST_NEXT, SPEED_HOST_END, SPEED_HOST_RESTART,
@@ -17,9 +14,6 @@ import { getRandomWord } from './src/app/games/impostor/words'
 import type {
   ImpPhase, ImpSettings, ImpPlayer, ImpVoteResult, ImpStatePayload,
 } from './src/app/games/impostor/types'
-import type {
-  FastestPhase, FastestPlayer, FastestSettings, FastestStatePayload,
-} from './src/app/games/fastest/types'
 import type {
   SpeedPhase, SpeedPlayer, SpeedSettings, SpeedStatePayload, SpeedChallenge,
 } from './src/app/games/speed-challenge/types'
@@ -203,57 +197,6 @@ function resolveImpVotes(io: SocketIOServer, gs: ImpGameState) {
   }, 8000))
 }
 
-// ─── Fastest game state (server-side) ────────────────────────────────────────
-
-interface FastestGameState {
-  roomCode: string
-  hostSocketId: string
-  phase: FastestPhase
-  settings: FastestSettings
-  players: FastestPlayer[]
-  currentQuestion: number
-  buzzedPlayerName: string | null
-  buzzTimestamp: number | null
-  winner: string | null
-}
-
-function buildFastestPayload(gs: FastestGameState): FastestStatePayload {
-  return {
-    roomCode: gs.roomCode,
-    phase: gs.phase,
-    settings: gs.settings,
-    players: gs.players,
-    currentQuestion: gs.currentQuestion,
-    buzzedPlayerName: gs.buzzedPlayerName,
-    buzzTimestamp: gs.buzzTimestamp,
-    winner: gs.winner,
-  }
-}
-
-function emitFastestState(io: SocketIOServer, gs: FastestGameState) {
-  io.to(gs.roomCode).emit(FASTEST_STATE, buildFastestPayload(gs))
-}
-
-// Advance to next question, awarding points to the buzzed player if any
-function advanceFastestQuestion(io: SocketIOServer, gs: FastestGameState, points: number) {
-  if (points > 0 && gs.buzzedPlayerName) {
-    const p = gs.players.find((pl) => pl.name === gs.buzzedPlayerName)
-    if (p) p.score += points
-  }
-  gs.buzzedPlayerName = null
-  gs.buzzTimestamp = null
-  gs.currentQuestion++
-
-  if (gs.currentQuestion > gs.settings.totalQuestions) {
-    gs.phase = 'finished'
-    const sorted = [...gs.players].sort((a, b) => b.score - a.score)
-    gs.winner = sorted[0]?.name ?? null
-  } else {
-    gs.phase = 'ready'
-  }
-  emitFastestState(io, gs)
-}
-
 // ─── Speed Challenge game state (server-side) ────────────────────────────────
 
 interface SpeedGameState {
@@ -375,7 +318,6 @@ app.prepare().then(() => {
 
   const rooms = new Map<string, Room>()
   const impRooms = new Map<string, ImpGameState>()
-  const fastestRooms = new Map<string, FastestGameState>()
   const speedRooms = new Map<string, SpeedGameState>()
 
   io.on('connection', (socket) => {
@@ -564,126 +506,6 @@ app.prepare().then(() => {
     })
 
     // ═══════════════════════════════════════════════════════════
-    // Fastest — room
-    // ═══════════════════════════════════════════════════════════
-
-    function assertFastestHost(roomCode: string): FastestGameState | null {
-      const gs = fastestRooms.get(roomCode)
-      if (!gs || gs.hostSocketId !== socket.id) return null
-      return gs
-    }
-
-    socket.on(FASTEST_CREATE, ({ settings: raw }: { settings: FastestSettings }) => {
-      const totalQuestions = [5, 10, 15, 20].includes(raw.totalQuestions) ? raw.totalQuestions : 10
-      const pointsPerCorrect = [5, 10, 15, 20].includes(raw.pointsPerCorrect) ? raw.pointsPerCorrect : 10
-      const maxPlayers = Math.min(Math.max(Math.floor(raw.maxPlayers) || 8, 2), 8)
-
-      const s: FastestSettings = { totalQuestions, pointsPerCorrect, maxPlayers }
-      const code = generateCode(fastestRooms)
-      const gs: FastestGameState = {
-        roomCode: code, hostSocketId: socket.id, phase: 'lobby',
-        settings: s, players: [], currentQuestion: 1,
-        buzzedPlayerName: null, buzzTimestamp: null, winner: null,
-      }
-      fastestRooms.set(code, gs)
-      socket.join(code)
-      socket.emit(FASTEST_STATE, buildFastestPayload(gs))
-    })
-
-    socket.on(FASTEST_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
-      const gs = fastestRooms.get(roomCode)
-      if (!gs) { socket.emit(FASTEST_ERROR, { message: 'الغرفة غير موجودة' }); return }
-      gs.hostSocketId = socket.id
-      socket.join(roomCode)
-      socket.emit(FASTEST_STATE, buildFastestPayload(gs))
-    })
-
-    // FASTEST_RECONNECT handles both first-join and reconnect
-    socket.on(FASTEST_RECONNECT, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
-      const gs = fastestRooms.get(roomCode)
-      if (!gs) { socket.emit(FASTEST_ERROR, { message: 'رمز الغرفة غير صحيح' }); return }
-
-      const existing = gs.players.find((p) => p.name === playerName)
-      if (existing) {
-        existing.socketId = socket.id; existing.id = socket.id
-        socket.join(roomCode)
-        socket.emit(FASTEST_STATE, buildFastestPayload(gs))
-      } else {
-        if (gs.phase !== 'lobby') { socket.emit(FASTEST_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
-        if (gs.players.length >= gs.settings.maxPlayers) { socket.emit(FASTEST_ERROR, { message: 'الغرفة ممتلئة' }); return }
-        const colorIndex = gs.players.length % 8
-        gs.players.push({ id: socket.id, socketId: socket.id, name: playerName, score: 0, colorIndex })
-        socket.join(roomCode)
-        emitFastestState(io, gs)
-      }
-    })
-
-    // ═══════════════════════════════════════════════════════════
-    // Fastest — game
-    // ═══════════════════════════════════════════════════════════
-
-    socket.on(FASTEST_START, ({ roomCode }: { roomCode: string }) => {
-      const gs = assertFastestHost(roomCode); if (!gs) return
-      if (gs.phase !== 'lobby') return
-      if (gs.players.length < 1) { socket.emit(FASTEST_ERROR, { message: 'لا يوجد لاعبون في الغرفة' }); return }
-      gs.phase = 'ready'
-      gs.currentQuestion = 1
-      gs.buzzedPlayerName = null
-      gs.buzzTimestamp = null
-      emitFastestState(io, gs)
-    })
-
-    socket.on(FASTEST_BUZZ, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
-      const gs = fastestRooms.get(roomCode)
-      if (!gs) return
-      if (gs.phase !== 'ready') return           // buzzers not open
-      if (gs.buzzedPlayerName !== null) return    // someone already buzzed
-
-      // Security: verify the socket owns this player slot
-      const player = gs.players.find((p) => p.name === playerName && p.socketId === socket.id)
-      if (!player) return
-
-      // Server timestamp is the authoritative source of truth
-      gs.buzzedPlayerName = playerName
-      gs.buzzTimestamp = Date.now()
-      gs.phase = 'buzzed'
-      emitFastestState(io, gs)
-    })
-
-    socket.on(FASTEST_HOST_AWARD, ({ roomCode, points }: { roomCode: string; points: number }) => {
-      const gs = assertFastestHost(roomCode); if (!gs) return
-      if (gs.phase !== 'buzzed') return
-      advanceFastestQuestion(io, gs, Math.max(0, Math.floor(points)))
-    })
-
-    socket.on(FASTEST_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
-      const gs = assertFastestHost(roomCode); if (!gs) return
-      if (gs.phase !== 'ready' && gs.phase !== 'buzzed') return
-      advanceFastestQuestion(io, gs, 0)
-    })
-
-    socket.on(FASTEST_HOST_END, ({ roomCode }: { roomCode: string }) => {
-      const gs = assertFastestHost(roomCode); if (!gs) return
-      gs.phase = 'finished'
-      gs.buzzedPlayerName = null
-      gs.buzzTimestamp = null
-      const sorted = [...gs.players].sort((a, b) => b.score - a.score)
-      gs.winner = sorted[0]?.name ?? null
-      emitFastestState(io, gs)
-    })
-
-    socket.on(FASTEST_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
-      const gs = assertFastestHost(roomCode); if (!gs) return
-      for (const p of gs.players) p.score = 0
-      gs.currentQuestion = 1
-      gs.buzzedPlayerName = null
-      gs.buzzTimestamp = null
-      gs.winner = null
-      gs.phase = 'ready'
-      emitFastestState(io, gs)
-    })
-
-    // ═══════════════════════════════════════════════════════════
     // Speed Challenge — room
     // ═══════════════════════════════════════════════════════════
 
@@ -805,7 +627,6 @@ app.prepare().then(() => {
     socket.on('disconnect', () => {
       handleLeave(socket.id, rooms, io)
       handleImpLeave(socket.id, impRooms, io)
-      handleFastestLeave(socket.id, fastestRooms)
       handleSpeedLeave(socket.id, speedRooms)
     })
   })
@@ -847,12 +668,6 @@ function handleImpLeave(socketId: string, impRooms: Map<string, ImpGameState>, i
   }
 }
 
-function handleFastestLeave(socketId: string, fastestRooms: Map<string, FastestGameState>) {
-  for (const gs of fastestRooms.values()) {
-    if (gs.hostSocketId === socketId) { gs.hostSocketId = ''; continue }
-    // Players keep their slot on disconnect — they can reconnect and their score is preserved
-  }
-}
 
 function handleSpeedLeave(socketId: string, speedRooms: Map<string, SpeedGameState>) {
   for (const gs of speedRooms.values()) {

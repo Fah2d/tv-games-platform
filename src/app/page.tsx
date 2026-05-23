@@ -10,14 +10,6 @@ const GAMES = [
     available: true,
   },
   {
-    id: 'fastest',
-    name: 'من الأسرع؟',
-    description: 'لعبة البازر والسرعة',
-    players: '٢-٨',
-    emoji: '⚡',
-    available: true,
-  },
-  {
     id: 'game1-horouf',
     name: 'حروف',
     description: 'لعبة الحروف والكلمات',
