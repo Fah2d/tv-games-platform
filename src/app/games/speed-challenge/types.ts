@@ -15,7 +15,7 @@ export interface SpeedSettings {
 
 export const DEFAULT_SPEED_SETTINGS: SpeedSettings = {
   totalRounds: 10,
-  selectedCategories: ['physical', 'vocal', 'thinking', 'creative', 'emoji'],
+  selectedCategories: ['physical', 'vocal', 'thinking', 'creative'],
 }
 
 export interface SpeedChallenge {
