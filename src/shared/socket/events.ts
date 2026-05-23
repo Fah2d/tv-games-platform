@@ -55,3 +55,21 @@ export const IMP_HOST_START_VOTING = 'IMP_HOST_START_VOTING' as const
 export const IMP_HOST_NEXT = 'IMP_HOST_NEXT' as const
 export const IMP_HOST_END = 'IMP_HOST_END' as const
 export const IMP_HOST_RESTART = 'IMP_HOST_RESTART' as const
+
+// Fastest (من الأسرع؟) — room lifecycle
+export const FASTEST_CREATE = 'FASTEST_CREATE' as const
+export const FASTEST_JOIN = 'FASTEST_JOIN' as const
+export const FASTEST_HOST_RECONNECT = 'FASTEST_HOST_RECONNECT' as const
+export const FASTEST_RECONNECT = 'FASTEST_RECONNECT' as const
+export const FASTEST_STATE = 'FASTEST_STATE' as const
+export const FASTEST_ERROR = 'FASTEST_ERROR' as const
+
+// Fastest — game flow
+export const FASTEST_START = 'FASTEST_START' as const
+export const FASTEST_BUZZ = 'FASTEST_BUZZ' as const
+
+// Fastest — host controls
+export const FASTEST_HOST_AWARD = 'FASTEST_HOST_AWARD' as const
+export const FASTEST_HOST_NEXT = 'FASTEST_HOST_NEXT' as const
+export const FASTEST_HOST_END = 'FASTEST_HOST_END' as const
+export const FASTEST_HOST_RESTART = 'FASTEST_HOST_RESTART' as const
