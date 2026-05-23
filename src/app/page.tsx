@@ -14,7 +14,14 @@ const GAMES = [
     available: true,
   },
   {
-    id: 'game2-tbd',
+    id: 'game2-family-feud',
+    name: 'عائلة فيود',
+    description: 'لعبة التنافس العائلي',
+    players: '٢-٢٠',
+    available: true,
+  },
+  {
+    id: 'game3-tbd',
     name: 'قريباً',
     description: 'لعبة جديدة قادمة',
     players: '٢-١٠',
