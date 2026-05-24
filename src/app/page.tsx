@@ -7,10 +7,10 @@ import { useAuth } from '@/shared/hooks/use-auth'
 
 const GAMES = [
   {
-    id: 'game1-horouf',
-    name: 'حروف',
-    description: 'لعبة الحروف والكلمات',
-    players: '٢-١٠',
+    id: 'photogame',
+    name: 'لعبة الصور',
+    description: 'صف صورتك للاعب الثاني',
+    players: '٢',
     available: true,
   },
   {
