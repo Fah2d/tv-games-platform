@@ -27,6 +27,13 @@ const GAMES = [
     players: '٣-١٠',
     available: true,
   },
+  {
+    id: 'game4-fawazeer',
+    name: 'فوازير',
+    description: 'لعبة الألغاز والأحاجي',
+    players: '٢ فريق',
+    available: true,
+  },
 ]
 
 export default function HubPage() {
