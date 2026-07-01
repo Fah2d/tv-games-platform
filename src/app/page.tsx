@@ -11,14 +11,16 @@ const GAMES = [
     name: 'لعبة الصور',
     description: 'صف صورتك للاعب الثاني',
     players: '٢',
+    emoji: '📸',
     available: true,
   },
   {
-    id: 'game2-tbd',
-    name: 'قريباً',
-    description: 'لعبة جديدة قادمة',
-    players: '٢-١٠',
-    available: false,
+    id: 'taboo',
+    name: 'ولا كلمة',
+    description: 'وصّف الكلمة لفريقك بدون ما تقول الكلمات المحرّمة',
+    players: '٢-٨',
+    emoji: '🚫',
+    available: true,
   },
 ]
 
@@ -68,7 +70,7 @@ function GameCard({ game }: { game: (typeof GAMES)[0] }) {
   return (
     <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 hover:border-zinc-700 transition-colors">
       <div className="aspect-video bg-zinc-800 flex items-center justify-center">
-        <span className="text-5xl">{game.available ? '🎮' : '🔒'}</span>
+        <span className="text-5xl">{game.available ? (game.emoji ?? '🎮') : '🔒'}</span>
       </div>
       <div className="p-5">
         <h2 className="text-xl font-bold text-white mb-1">{game.name}</h2>

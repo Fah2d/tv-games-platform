@@ -22,9 +22,26 @@ import {
   PHOTO_HOST_NEXT,
   PHOTO_HOST_END,
   PHOTO_HOST_RESTART,
+  TABOO_CREATE,
+  TABOO_HOST_RECONNECT,
+  TABOO_JOIN,
+  TABOO_STATE,
+  TABOO_ERROR,
+  TABOO_CARD,
+  TABOO_GUESS_RESULT,
+  TABOO_START,
+  TABOO_SUBMIT_CLUE,
+  TABOO_SUBMIT_GUESS,
+  TABOO_SKIP,
+  TABOO_HOST_END_TURN,
+  TABOO_HOST_NEXT,
+  TABOO_HOST_END,
+  TABOO_HOST_RESTART,
 } from './src/shared/socket/events'
 import type { PhotoPhase, PhotoPlayer, PhotoSettings } from './src/app/games/photogame/types'
 import { pickRandomPhoto } from './src/app/games/photogame/categories'
+import type { TabooPhase, TabooPlayer, TabooSettings, TabooCard, ClueEntry } from './src/app/games/taboo/types'
+import { pickTabooCard, validateClue, validateGuess } from './src/app/games/taboo/words'
 
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -130,6 +147,77 @@ function handlePhotoLeave(socketId: string, photoRooms: Map<string, PhotoGameSta
   }
 }
 
+// ── Taboo Game state ──────────────────────────────────────────────────────────
+
+interface TabooGameState {
+  roomCode: string
+  hostSocketId: string
+  phase: TabooPhase
+  settings: TabooSettings
+  players: TabooPlayer[]
+  currentTurnIndex: number
+  clues: ClueEntry[]
+  turnScore: number
+  lastEvent: 'buzz' | 'correct' | null
+  winner: string | null
+  currentCard: TabooCard | null
+  usedCardIds: Set<number>
+}
+
+function generateTabooCode(tabooRooms: Map<string, TabooGameState>): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return tabooRooms.has(code) ? generateTabooCode(tabooRooms) : code
+}
+
+function emitTabooState(io: SocketIOServer, state: TabooGameState) {
+  io.to(state.roomCode).emit(TABOO_STATE, {
+    roomCode: state.roomCode,
+    phase: state.phase,
+    settings: state.settings,
+    players: state.players,
+    currentTurnIndex: state.currentTurnIndex,
+    totalTurns: state.players.length * state.settings.totalRounds,
+    clues: state.clues,
+    turnScore: state.turnScore,
+    lastEvent: state.lastEvent,
+    winner: state.winner,
+  })
+}
+
+function sendCardToClueGiver(io: SocketIOServer, state: TabooGameState) {
+  const card = pickTabooCard(state.settings.difficulty, state.usedCardIds)
+  state.usedCardIds.add(card.id)
+  state.currentCard = card
+  state.clues = []
+
+  const clueGiver = state.players[state.currentTurnIndex % state.players.length]
+  const sock = clueGiver ? io.sockets.sockets.get(clueGiver.socketId) : undefined
+  if (sock) sock.emit(TABOO_CARD, { targetWord: card.targetWord, tabooWords: card.tabooWords })
+}
+
+function finishTabooGame(io: SocketIOServer, state: TabooGameState) {
+  state.phase = 'finished'
+  const sorted = [...state.players].sort((a, b) => b.score - a.score)
+  state.winner = sorted[0]?.name ?? null
+  emitTabooState(io, state)
+}
+
+function handleTabooLeave(socketId: string, tabooRooms: Map<string, TabooGameState>, io: SocketIOServer) {
+  for (const [code, state] of tabooRooms.entries()) {
+    if (state.hostSocketId !== socketId && !state.players.some((p) => p.socketId === socketId)) continue
+
+    if (state.hostSocketId === socketId) {
+      tabooRooms.delete(code)
+      io.to(code).emit(TABOO_ERROR, { message: 'أنهى المضيف الغرفة' })
+    } else {
+      state.players = state.players.filter((p) => p.socketId !== socketId)
+      emitTabooState(io, state)
+    }
+  }
+}
+
 // ── App bootstrap ─────────────────────────────────────────────────────────────
 
 app.prepare().then(() => {
@@ -143,6 +231,7 @@ app.prepare().then(() => {
 
   const rooms = new Map<string, Room>()
   const photoRooms = new Map<string, PhotoGameState>()
+  const tabooRooms = new Map<string, TabooGameState>()
 
   io.on('connection', (socket) => {
 
@@ -270,6 +359,195 @@ app.prepare().then(() => {
       emitPhotoState(io, state)
     })
 
+    // ── Taboo Game handlers ───────────────────────────────────────────────────
+
+    socket.on(TABOO_CREATE, ({ settings }: { settings: TabooSettings }) => {
+      const code = generateTabooCode(tabooRooms)
+      const state: TabooGameState = {
+        roomCode: code,
+        hostSocketId: socket.id,
+        phase: 'lobby',
+        settings,
+        players: [],
+        currentTurnIndex: 0,
+        clues: [],
+        turnScore: 0,
+        lastEvent: null,
+        winner: null,
+        currentCard: null,
+        usedCardIds: new Set(),
+      }
+      tabooRooms.set(code, state)
+      socket.join(code)
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state) { socket.emit(TABOO_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      state.hostSocketId = socket.id
+      socket.join(roomCode)
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_JOIN, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const state = tabooRooms.get(roomCode.toUpperCase())
+      if (!state) { socket.emit(TABOO_ERROR, { message: 'الغرفة غير موجودة' }); return }
+
+      const existing = state.players.find((p) => p.name === playerName)
+      if (existing) {
+        existing.socketId = socket.id
+        socket.join(state.roomCode)
+        emitTabooState(io, state)
+        if (state.phase === 'playing' && state.currentCard) {
+          const clueGiver = state.players[state.currentTurnIndex % state.players.length]
+          if (clueGiver?.name === playerName) {
+            socket.emit(TABOO_CARD, { targetWord: state.currentCard.targetWord, tabooWords: state.currentCard.tabooWords })
+          }
+        }
+        return
+      }
+
+      if (state.phase !== 'lobby') { socket.emit(TABOO_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
+      if (state.players.length >= 8) { socket.emit(TABOO_ERROR, { message: 'الغرفة ممتلئة (الحد الأقصى ٨ فرق)' }); return }
+
+      const player: TabooPlayer = {
+        id: `taboo_${Date.now()}_${Math.random()}`,
+        socketId: socket.id,
+        name: playerName,
+        score: 0,
+        colorIndex: state.players.length,
+      }
+      state.players.push(player)
+      socket.join(state.roomCode)
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_START, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      if (state.players.length < 2) { socket.emit(TABOO_ERROR, { message: 'يجب وجود لاعبَين على الأقل' }); return }
+
+      state.phase = 'playing'
+      state.currentTurnIndex = 0
+      state.turnScore = 0
+      state.lastEvent = null
+      sendCardToClueGiver(io, state)
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_SUBMIT_CLUE, ({ roomCode, clue }: { roomCode: string; clue: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.phase !== 'playing' || !state.currentCard) return
+
+      const clueGiver = state.players[state.currentTurnIndex % state.players.length]
+      if (!clueGiver || clueGiver.socketId !== socket.id) return
+
+      const trimmed = clue.trim()
+      if (!trimmed) return
+
+      const result = validateClue(trimmed, state.currentCard)
+      if (!result.valid) {
+        state.clues.push({ text: trimmed, valid: false, violatedWord: result.violatedWord })
+        state.lastEvent = 'buzz'
+        emitTabooState(io, state)
+        // Skip to next card after a buzz
+        sendCardToClueGiver(io, state)
+        emitTabooState(io, state)
+      } else {
+        state.clues.push({ text: trimmed, valid: true })
+        state.lastEvent = null
+        emitTabooState(io, state)
+      }
+    })
+
+    socket.on(TABOO_SUBMIT_GUESS, ({ roomCode, guess }: { roomCode: string; guess: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.phase !== 'playing' || !state.currentCard) return
+
+      const clueGiver = state.players[state.currentTurnIndex % state.players.length]
+      if (!clueGiver || clueGiver.socketId === socket.id) return  // clue-giver can't guess
+
+      const trimmed = guess.trim()
+      if (!trimmed) return
+
+      const correct = validateGuess(trimmed, state.currentCard.targetWord)
+      socket.emit(TABOO_GUESS_RESULT, { correct })
+
+      if (correct) {
+        clueGiver.score += 1
+        state.turnScore += 1
+        state.lastEvent = 'correct'
+        // Pick new card for this turn
+        sendCardToClueGiver(io, state)
+        emitTabooState(io, state)
+      }
+    })
+
+    socket.on(TABOO_SKIP, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.phase !== 'playing') return
+
+      const clueGiver = state.players[state.currentTurnIndex % state.players.length]
+      if (!clueGiver || clueGiver.socketId !== socket.id) return
+
+      state.lastEvent = null
+      sendCardToClueGiver(io, state)
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_END_TURN, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      if (state.phase !== 'playing') return
+
+      state.phase = 'turn_end'
+      state.currentCard = null
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      if (state.phase !== 'turn_end') return
+
+      const totalTurns = state.players.length * state.settings.totalRounds
+      state.currentTurnIndex += 1
+
+      if (state.currentTurnIndex >= totalTurns) {
+        finishTabooGame(io, state)
+        return
+      }
+
+      state.phase = 'playing'
+      state.turnScore = 0
+      state.lastEvent = null
+      sendCardToClueGiver(io, state)
+      emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_END, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      finishTabooGame(io, state)
+    })
+
+    socket.on(TABOO_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+
+      state.phase = 'lobby'
+      state.currentTurnIndex = 0
+      state.clues = []
+      state.turnScore = 0
+      state.lastEvent = null
+      state.winner = null
+      state.currentCard = null
+      state.usedCardIds.clear()
+      state.players.forEach((p) => { p.score = 0 })
+      emitTabooState(io, state)
+    })
+
     // ── Room handlers ─────────────────────────────────────────────────────────
 
     socket.on(ROOM_CREATE, ({ gameId }: { gameId: string }) => {
@@ -318,6 +596,7 @@ app.prepare().then(() => {
     socket.on('disconnect', () => {
       handleLeave(socket.id, rooms, io)
       handlePhotoLeave(socket.id, photoRooms, io)
+      handleTabooLeave(socket.id, tabooRooms, io)
     })
   })
 
