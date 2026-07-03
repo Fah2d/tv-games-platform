@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%       { transform: translateX(-8px); }
+  30%       { transform: translateX(8px); }
+  45%       { transform: translateX(-6px); }
+  60%       { transform: translateX(6px); }
+  75%       { transform: translateX(-3px); }
+  90%       { transform: translateX(3px); }
+}
+
+@keyframes reveal {
+  0%   { transform: scaleY(0); opacity: 0; }
+  60%  { transform: scaleY(1.06); opacity: 1; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+@keyframes bounce-in {
+  0%   { transform: scale(0.5); opacity: 0; }
+  70%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes wheel-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(1440deg); }
+}
+
+@keyframes strike-in {
+  0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+  60%  { transform: scale(1.2) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes fade-up {
+  0%   { transform: translateY(16px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.animate-shake      { animation: shake 0.5s ease-in-out; }
+.animate-reveal     { animation: reveal 0.4s ease-out forwards; }
+.animate-bounce-in  { animation: bounce-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-wheel      { animation: wheel-spin 2.5s cubic-bezier(0.1, 0.7, 0.3, 1) forwards; }
+.animate-strike-in  { animation: strike-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-fade-up    { animation: fade-up 0.3s ease-out forwards; }
