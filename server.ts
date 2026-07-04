@@ -47,6 +47,20 @@ import {
   IMP_HOST_NEXT,
   IMP_HOST_END,
   IMP_HOST_RESTART,
+  FASTEST_CREATE, FASTEST_HOST_RECONNECT, FASTEST_RECONNECT,
+  FASTEST_STATE, FASTEST_ERROR, FASTEST_START, FASTEST_BUZZ,
+  FASTEST_HOST_AWARD, FASTEST_HOST_NEXT, FASTEST_HOST_END, FASTEST_HOST_RESTART,
+  SPEED_CREATE, SPEED_HOST_RECONNECT, SPEED_RECONNECT,
+  SPEED_STATE, SPEED_ERROR, SPEED_START,
+  SPEED_HOST_AWARD, SPEED_HOST_NEXT, SPEED_HOST_END, SPEED_HOST_RESTART,
+  PHOTO_CREATE, PHOTO_HOST_RECONNECT, PHOTO_RECONNECT,
+  PHOTO_STATE, PHOTO_ERROR, PHOTO_YOUR_PHOTO, PHOTO_REVEAL_PHOTO,
+  PHOTO_START, PHOTO_HOST_REVEAL, PHOTO_HOST_AWARD, PHOTO_HOST_NEXT,
+  PHOTO_HOST_END, PHOTO_HOST_RESTART,
+  TABOO_CREATE, TABOO_HOST_RECONNECT, TABOO_JOIN,
+  TABOO_STATE, TABOO_ERROR, TABOO_CARD, TABOO_GUESS_RESULT,
+  TABOO_START, TABOO_SUBMIT_CLUE, TABOO_SUBMIT_GUESS, TABOO_SKIP,
+  TABOO_HOST_END_TURN, TABOO_HOST_NEXT, TABOO_HOST_END, TABOO_HOST_RESTART,
 } from './src/shared/socket/events'
 import { FAMILY_FEUD_QUESTIONS } from './src/app/games/game2-family-feud/questions'
 import { validateAnswer, buildExactCache } from './src/app/games/game2-family-feud/validation'
@@ -66,6 +80,13 @@ import type {
   ImpVoteResult,
   ImpStatePayload,
 } from './src/app/games/game3-impostor/types'
+import type { FastestPhase, FastestSettings, FastestPlayer, FastestStatePayload } from './src/app/games/fastest/types'
+import type { SpeedPhase, SpeedSettings, SpeedPlayer, SpeedStatePayload, SpeedChallenge } from './src/app/games/speed-challenge/types'
+import { buildChallengePool } from './src/app/games/speed-challenge/challenges'
+import type { PhotoPhase, PhotoPlayer, PhotoSettings } from './src/app/games/photogame/types'
+import { pickRandomPhoto } from './src/app/games/photogame/categories'
+import type { TabooPhase, TabooPlayer, TabooSettings, TabooCard, ClueEntry } from './src/app/games/taboo/types'
+import { pickTabooCard, validateClue, validateGuess } from './src/app/games/taboo/words'
 
 const port = parseInt(process.env.PORT || '3000', 10)
 const dev = process.env.NODE_ENV !== 'production'
@@ -101,6 +122,59 @@ interface ImpGameState {
   voteResult: ImpVoteResult | null
   winner: 'innocents' | 'impostors' | null
   timerStartedAt: number | null
+}
+
+interface FastestGameState {
+  roomCode: string
+  hostSocketId: string
+  phase: FastestPhase
+  settings: FastestSettings
+  players: FastestPlayer[]
+  currentQuestion: number
+  buzzedPlayerName: string | null
+  buzzTimestamp: number | null
+  winner: string | null
+}
+
+interface SpeedGameState {
+  roomCode: string
+  hostSocketId: string
+  phase: SpeedPhase
+  settings: SpeedSettings
+  players: SpeedPlayer[]
+  currentRound: number
+  countdownValue: number | null
+  challengePool: SpeedChallenge[]
+  usedChallengeIndices: Set<number>
+  currentChallenge: SpeedChallenge | null
+  lastWinnerName: string | null
+  winner: string | null
+}
+
+interface PhotoGameState {
+  roomCode: string
+  hostSocketId: string
+  phase: PhotoPhase
+  settings: PhotoSettings
+  players: PhotoPlayer[]
+  currentRound: number
+  winner: string | null
+  usedPhotos: Set<string>
+}
+
+interface TabooGameState {
+  roomCode: string
+  hostSocketId: string
+  phase: TabooPhase
+  settings: TabooSettings
+  players: TabooPlayer[]
+  currentTurnIndex: number
+  clues: ClueEntry[]
+  turnScore: number
+  lastEvent: 'buzz' | 'correct' | null
+  winner: string | null
+  currentCard: TabooCard | null
+  usedCardIds: Set<number>
 }
 
 function generateCode(rooms: Map<string, unknown>): string {
@@ -325,6 +399,187 @@ function resolveImpVotes(io: SocketIOServer, gs: ImpGameState) {
   }, 8000))
 }
 
+// ─── Fastest helpers ──────────────────────────────────────────────────────────
+
+function buildFastestPayload(gs: FastestGameState): FastestStatePayload {
+  return {
+    roomCode: gs.roomCode, phase: gs.phase, settings: gs.settings,
+    players: gs.players, currentQuestion: gs.currentQuestion,
+    buzzedPlayerName: gs.buzzedPlayerName, buzzTimestamp: gs.buzzTimestamp, winner: gs.winner,
+  }
+}
+
+function emitFastestState(io: SocketIOServer, gs: FastestGameState) {
+  io.to(gs.roomCode).emit(FASTEST_STATE, buildFastestPayload(gs))
+}
+
+function advanceFastestQuestion(io: SocketIOServer, gs: FastestGameState, points: number) {
+  if (points > 0 && gs.buzzedPlayerName) {
+    const p = gs.players.find((pl) => pl.name === gs.buzzedPlayerName)
+    if (p) p.score += points
+  }
+  gs.buzzedPlayerName = null
+  gs.buzzTimestamp = null
+  gs.currentQuestion++
+  if (gs.currentQuestion > gs.settings.totalQuestions) {
+    gs.phase = 'finished'
+    const sorted = [...gs.players].sort((a, b) => b.score - a.score)
+    gs.winner = sorted[0]?.name ?? null
+  } else {
+    gs.phase = 'ready'
+  }
+  emitFastestState(io, gs)
+}
+
+// ─── Speed Challenge helpers ──────────────────────────────────────────────────
+
+const speedTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+function clearSpeedTimer(roomCode: string) {
+  const t = speedTimers.get(roomCode)
+  if (t) { clearTimeout(t); speedTimers.delete(roomCode) }
+}
+
+function buildSpeedPayload(gs: SpeedGameState): SpeedStatePayload {
+  return {
+    roomCode: gs.roomCode, phase: gs.phase, settings: gs.settings,
+    players: gs.players, currentRound: gs.currentRound,
+    countdownValue: gs.countdownValue, currentChallenge: gs.currentChallenge,
+    lastWinnerName: gs.lastWinnerName, winner: gs.winner,
+  }
+}
+
+function emitSpeedState(io: SocketIOServer, gs: SpeedGameState) {
+  io.to(gs.roomCode).emit(SPEED_STATE, buildSpeedPayload(gs))
+}
+
+function pickNextChallenge(gs: SpeedGameState): SpeedChallenge | null {
+  const available = gs.challengePool.map((c, i) => ({ c, i })).filter(({ i }) => !gs.usedChallengeIndices.has(i))
+  if (available.length === 0) {
+    gs.usedChallengeIndices = new Set()
+    const all = gs.challengePool.map((c, i) => ({ c, i }))
+    if (all.length === 0) return null
+    const pick = all[Math.floor(Math.random() * all.length)]
+    gs.usedChallengeIndices.add(pick.i)
+    return pick.c
+  }
+  const pick = available[Math.floor(Math.random() * available.length)]
+  gs.usedChallengeIndices.add(pick.i)
+  return pick.c
+}
+
+function runSpeedCountdown(io: SocketIOServer, gs: SpeedGameState, value: number) {
+  clearSpeedTimer(gs.roomCode)
+  gs.phase = 'countdown'
+  gs.countdownValue = value
+  emitSpeedState(io, gs)
+  speedTimers.set(gs.roomCode, setTimeout(() => {
+    if (gs.phase !== 'countdown') return
+    if (value > 1) { runSpeedCountdown(io, gs, value - 1) }
+    else { gs.currentChallenge = pickNextChallenge(gs); gs.phase = 'challenge'; gs.countdownValue = null; emitSpeedState(io, gs) }
+  }, 1000))
+}
+
+function advanceSpeedRound(io: SocketIOServer, gs: SpeedGameState, winnerName: string | null) {
+  clearSpeedTimer(gs.roomCode)
+  if (winnerName) {
+    const p = gs.players.find((pl) => pl.name === winnerName)
+    if (p) p.score++
+    gs.lastWinnerName = winnerName
+  } else { gs.lastWinnerName = null }
+  gs.currentRound++
+  if (gs.currentRound > gs.settings.totalRounds) {
+    gs.phase = 'finished'
+    const sorted = [...gs.players].sort((a, b) => b.score - a.score)
+    gs.winner = sorted[0]?.name ?? null
+    gs.currentChallenge = null
+    emitSpeedState(io, gs)
+  } else { runSpeedCountdown(io, gs, 3) }
+}
+
+// ─── Photo Game helpers ───────────────────────────────────────────────────────
+
+function generatePhotoCode(photoRooms: Map<string, PhotoGameState>): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return photoRooms.has(code) ? generatePhotoCode(photoRooms) : code
+}
+
+function emitPhotoState(io: SocketIOServer, state: PhotoGameState) {
+  io.to(state.roomCode).emit(PHOTO_STATE, {
+    roomCode: state.roomCode, phase: state.phase, settings: state.settings,
+    currentRound: state.currentRound, winner: state.winner,
+    players: state.players.map((p) => ({
+      ...p, assignedPhoto: state.phase === 'playing' ? null : p.assignedPhoto,
+    })),
+  })
+}
+
+function assignPhotos(io: SocketIOServer, state: PhotoGameState) {
+  const [p1, p2] = state.players
+  const photo1 = pickRandomPhoto(state.settings.selectedCategories, state.usedPhotos)
+  state.usedPhotos.add(photo1)
+  const photo2 = pickRandomPhoto(state.settings.selectedCategories, state.usedPhotos)
+  state.usedPhotos.add(photo2)
+  p1.assignedPhoto = photo1; p2.assignedPhoto = photo2
+  const sock1 = io.sockets.sockets.get(p1.socketId)
+  const sock2 = io.sockets.sockets.get(p2.socketId)
+  if (sock1) sock1.emit(PHOTO_YOUR_PHOTO, { photo: photo1 })
+  if (sock2) sock2.emit(PHOTO_YOUR_PHOTO, { photo: photo2 })
+}
+
+function advancePhotoRound(io: SocketIOServer, state: PhotoGameState) {
+  if (state.currentRound >= state.settings.totalRounds) { finishPhotoGame(io, state); return }
+  state.currentRound += 1
+  state.phase = 'playing'
+  state.players.forEach((p) => { p.assignedPhoto = null })
+  assignPhotos(io, state)
+  emitPhotoState(io, state)
+}
+
+function finishPhotoGame(io: SocketIOServer, state: PhotoGameState) {
+  state.phase = 'finished'
+  const sorted = [...state.players].sort((a, b) => b.score - a.score)
+  state.winner = sorted[0]?.name ?? null
+  emitPhotoState(io, state)
+}
+
+// ─── Taboo helpers ────────────────────────────────────────────────────────────
+
+function generateTabooCode(tabooRooms: Map<string, TabooGameState>): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)]
+  return tabooRooms.has(code) ? generateTabooCode(tabooRooms) : code
+}
+
+function emitTabooState(io: SocketIOServer, state: TabooGameState) {
+  io.to(state.roomCode).emit(TABOO_STATE, {
+    roomCode: state.roomCode, phase: state.phase, settings: state.settings,
+    players: state.players, currentTurnIndex: state.currentTurnIndex,
+    totalTurns: state.players.length * state.settings.totalRounds,
+    clues: state.clues, turnScore: state.turnScore, lastEvent: state.lastEvent, winner: state.winner,
+  })
+}
+
+function sendCardToClueGiver(io: SocketIOServer, state: TabooGameState) {
+  const card = pickTabooCard(state.settings.difficulty, state.usedCardIds)
+  state.usedCardIds.add(card.id)
+  state.currentCard = card
+  state.clues = []
+  const clueGiver = state.players[state.currentTurnIndex % state.players.length]
+  const sock = clueGiver ? io.sockets.sockets.get(clueGiver.socketId) : undefined
+  if (sock) sock.emit(TABOO_CARD, { targetWord: card.targetWord, tabooWords: card.tabooWords })
+}
+
+function finishTabooGame(io: SocketIOServer, state: TabooGameState) {
+  state.phase = 'finished'
+  const sorted = [...state.players].sort((a, b) => b.score - a.score)
+  state.winner = sorted[0]?.name ?? null
+  emitTabooState(io, state)
+}
+
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     handle(req, res)
@@ -337,6 +592,10 @@ app.prepare().then(() => {
   const rooms = new Map<string, Room>()
   const ffRooms = new Map<string, FFGameState>()
   const impRooms = new Map<string, ImpGameState>()
+  const fastestRooms = new Map<string, FastestGameState>()
+  const speedRooms = new Map<string, SpeedGameState>()
+  const photoRooms = new Map<string, PhotoGameState>()
+  const tabooRooms = new Map<string, TabooGameState>()
 
   io.on('connection', (socket) => {
     socket.on(ROOM_CREATE, ({ gameId }: { gameId: string }) => {
@@ -800,10 +1059,394 @@ app.prepare().then(() => {
       startImpRound(io, gs)
     })
 
+    // ─── Fastest — room management ────────────────────────────────────────────
+
+    function assertFastestHost(roomCode: string): FastestGameState | null {
+      const gs = fastestRooms.get(roomCode)
+      if (!gs || gs.hostSocketId !== socket.id) return null
+      return gs
+    }
+
+    socket.on(FASTEST_CREATE, ({ settings: raw }: { settings: FastestSettings }) => {
+      const totalQuestions = [5, 10, 15, 20].includes(raw.totalQuestions) ? raw.totalQuestions : 10
+      const pointsPerCorrect = [5, 10, 15, 20].includes(raw.pointsPerCorrect) ? raw.pointsPerCorrect : 10
+      const maxPlayers = Math.min(Math.max(Math.floor(raw.maxPlayers) || 8, 2), 8)
+      const s: FastestSettings = { totalQuestions, pointsPerCorrect, maxPlayers }
+      const code = generateCode(fastestRooms)
+      const gs: FastestGameState = {
+        roomCode: code, hostSocketId: socket.id, phase: 'lobby',
+        settings: s, players: [], currentQuestion: 1,
+        buzzedPlayerName: null, buzzTimestamp: null, winner: null,
+      }
+      fastestRooms.set(code, gs)
+      socket.join(code)
+      socket.emit(FASTEST_STATE, buildFastestPayload(gs))
+    })
+
+    socket.on(FASTEST_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
+      const gs = fastestRooms.get(roomCode)
+      if (!gs) { socket.emit(FASTEST_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      gs.hostSocketId = socket.id
+      socket.join(roomCode)
+      socket.emit(FASTEST_STATE, buildFastestPayload(gs))
+    })
+
+    socket.on(FASTEST_RECONNECT, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const gs = fastestRooms.get(roomCode)
+      if (!gs) { socket.emit(FASTEST_ERROR, { message: 'رمز الغرفة غير صحيح' }); return }
+      const existing = gs.players.find((p) => p.name === playerName)
+      if (existing) {
+        existing.socketId = socket.id; existing.id = socket.id
+        socket.join(roomCode)
+        socket.emit(FASTEST_STATE, buildFastestPayload(gs))
+      } else {
+        if (gs.phase !== 'lobby') { socket.emit(FASTEST_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
+        if (gs.players.length >= gs.settings.maxPlayers) { socket.emit(FASTEST_ERROR, { message: 'الغرفة ممتلئة' }); return }
+        const colorIndex = gs.players.length % 8
+        gs.players.push({ id: socket.id, socketId: socket.id, name: playerName, score: 0, colorIndex })
+        socket.join(roomCode)
+        emitFastestState(io, gs)
+      }
+    })
+
+    socket.on(FASTEST_START, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertFastestHost(roomCode); if (!gs) return
+      if (gs.phase !== 'lobby') return
+      if (gs.players.length < 1) { socket.emit(FASTEST_ERROR, { message: 'لا يوجد لاعبون في الغرفة' }); return }
+      gs.phase = 'ready'; gs.currentQuestion = 1
+      gs.buzzedPlayerName = null; gs.buzzTimestamp = null
+      emitFastestState(io, gs)
+    })
+
+    socket.on(FASTEST_BUZZ, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const gs = fastestRooms.get(roomCode)
+      if (!gs || gs.phase !== 'ready' || gs.buzzedPlayerName !== null) return
+      const player = gs.players.find((p) => p.name === playerName && p.socketId === socket.id)
+      if (!player) return
+      gs.buzzedPlayerName = playerName; gs.buzzTimestamp = Date.now(); gs.phase = 'buzzed'
+      emitFastestState(io, gs)
+    })
+
+    socket.on(FASTEST_HOST_AWARD, ({ roomCode, points }: { roomCode: string; points: number }) => {
+      const gs = assertFastestHost(roomCode); if (!gs) return
+      if (gs.phase !== 'buzzed') return
+      advanceFastestQuestion(io, gs, Math.max(0, Math.floor(points)))
+    })
+
+    socket.on(FASTEST_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertFastestHost(roomCode); if (!gs) return
+      if (gs.phase !== 'ready' && gs.phase !== 'buzzed') return
+      advanceFastestQuestion(io, gs, 0)
+    })
+
+    socket.on(FASTEST_HOST_END, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertFastestHost(roomCode); if (!gs) return
+      gs.phase = 'finished'; gs.buzzedPlayerName = null; gs.buzzTimestamp = null
+      const sorted = [...gs.players].sort((a, b) => b.score - a.score)
+      gs.winner = sorted[0]?.name ?? null
+      emitFastestState(io, gs)
+    })
+
+    socket.on(FASTEST_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertFastestHost(roomCode); if (!gs) return
+      for (const p of gs.players) p.score = 0
+      gs.currentQuestion = 1; gs.buzzedPlayerName = null; gs.buzzTimestamp = null
+      gs.winner = null; gs.phase = 'ready'
+      emitFastestState(io, gs)
+    })
+
+    // ─── Speed Challenge — room management ───────────────────────────────────
+
+    function assertSpeedHost(roomCode: string): SpeedGameState | null {
+      const gs = speedRooms.get(roomCode)
+      if (!gs || gs.hostSocketId !== socket.id) return null
+      return gs
+    }
+
+    socket.on(SPEED_CREATE, ({ settings: raw }: { settings: SpeedSettings }) => {
+      const totalRounds = [5, 10, 15, 20].includes(raw.totalRounds) ? raw.totalRounds : 10
+      const selectedCategories = Array.isArray(raw.selectedCategories) && raw.selectedCategories.length > 0
+        ? raw.selectedCategories : ['physical', 'vocal', 'thinking', 'creative', 'emoji']
+      const s: SpeedSettings = { totalRounds, selectedCategories }
+      const code = generateCode(speedRooms)
+      const challengePool = buildChallengePool(selectedCategories)
+      const gs: SpeedGameState = {
+        roomCode: code, hostSocketId: socket.id, phase: 'lobby',
+        settings: s, players: [], currentRound: 1,
+        countdownValue: null, challengePool, usedChallengeIndices: new Set(),
+        currentChallenge: null, lastWinnerName: null, winner: null,
+      }
+      speedRooms.set(code, gs)
+      socket.join(code)
+      socket.emit('SPEED_ROOM_CREATED', { roomCode: code })
+      socket.emit(SPEED_STATE, buildSpeedPayload(gs))
+    })
+
+    socket.on(SPEED_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
+      const gs = speedRooms.get(roomCode)
+      if (!gs) { socket.emit(SPEED_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      gs.hostSocketId = socket.id; socket.join(roomCode)
+      socket.emit(SPEED_STATE, buildSpeedPayload(gs))
+    })
+
+    socket.on(SPEED_RECONNECT, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const gs = speedRooms.get(roomCode)
+      if (!gs) { socket.emit(SPEED_ERROR, { message: 'رمز الغرفة غير صحيح' }); return }
+      const existing = gs.players.find((p) => p.name === playerName)
+      if (existing) {
+        existing.socketId = socket.id; existing.id = socket.id
+        socket.join(roomCode); socket.emit(SPEED_STATE, buildSpeedPayload(gs))
+      } else {
+        if (gs.phase !== 'lobby') { socket.emit(SPEED_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
+        if (gs.players.length >= 8) { socket.emit(SPEED_ERROR, { message: 'الغرفة ممتلئة' }); return }
+        const colorIndex = gs.players.length % 8
+        gs.players.push({ id: socket.id, socketId: socket.id, name: playerName, score: 0, colorIndex })
+        socket.join(roomCode); emitSpeedState(io, gs)
+      }
+    })
+
+    socket.on(SPEED_START, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      if (gs.phase !== 'lobby') return
+      if (gs.players.length < 1) { socket.emit(SPEED_ERROR, { message: 'لا يوجد لاعبون في الغرفة' }); return }
+      gs.currentRound = 1; gs.lastWinnerName = null; gs.winner = null
+      runSpeedCountdown(io, gs, 3)
+    })
+
+    socket.on(SPEED_HOST_AWARD, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      if (playerName === '__select') {
+        if (gs.phase !== 'challenge') return
+        gs.phase = 'selecting'; emitSpeedState(io, gs); return
+      }
+      if (gs.phase !== 'selecting') return
+      advanceSpeedRound(io, gs, playerName)
+    })
+
+    socket.on(SPEED_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      if (gs.phase !== 'challenge' && gs.phase !== 'selecting') return
+      advanceSpeedRound(io, gs, null)
+    })
+
+    socket.on(SPEED_HOST_END, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      clearSpeedTimer(roomCode); gs.phase = 'finished'; gs.currentChallenge = null
+      const sorted = [...gs.players].sort((a, b) => b.score - a.score)
+      gs.winner = sorted[0]?.name ?? null; emitSpeedState(io, gs)
+    })
+
+    socket.on(SPEED_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
+      const gs = assertSpeedHost(roomCode); if (!gs) return
+      clearSpeedTimer(roomCode)
+      for (const p of gs.players) p.score = 0
+      gs.currentRound = 1; gs.lastWinnerName = null; gs.winner = null
+      gs.currentChallenge = null; gs.usedChallengeIndices = new Set()
+      runSpeedCountdown(io, gs, 3)
+    })
+
+    // ─── Photo Game — room management ────────────────────────────────────────
+
+    socket.on(PHOTO_CREATE, ({ settings }: { settings: PhotoSettings }) => {
+      const code = generatePhotoCode(photoRooms)
+      const state: PhotoGameState = {
+        roomCode: code, hostSocketId: socket.id, phase: 'lobby',
+        settings, players: [], currentRound: 0, winner: null, usedPhotos: new Set(),
+      }
+      photoRooms.set(code, state); socket.join(code); emitPhotoState(io, state)
+    })
+
+    socket.on(PHOTO_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state) { socket.emit(PHOTO_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      state.hostSocketId = socket.id; socket.join(roomCode); emitPhotoState(io, state)
+    })
+
+    socket.on(PHOTO_RECONNECT, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state) { socket.emit(PHOTO_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      const existing = state.players.find((p) => p.name === playerName)
+      if (existing) {
+        existing.socketId = socket.id; socket.join(roomCode); emitPhotoState(io, state)
+        if (state.phase === 'playing' && existing.assignedPhoto) socket.emit(PHOTO_YOUR_PHOTO, { photo: existing.assignedPhoto })
+        return
+      }
+      if (state.phase !== 'lobby') { socket.emit(PHOTO_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
+      if (state.players.length >= 2) { socket.emit(PHOTO_ERROR, { message: 'الغرفة ممتلئة' }); return }
+      const player: PhotoPlayer = { id: `photo_${Date.now()}`, socketId: socket.id, name: playerName, score: 0, colorIndex: state.players.length, assignedPhoto: null }
+      state.players.push(player); socket.join(roomCode); emitPhotoState(io, state)
+    })
+
+    socket.on(PHOTO_START, ({ roomCode }: { roomCode: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      if (state.players.length < 2) { socket.emit(PHOTO_ERROR, { message: 'يجب وجود لاعبان' }); return }
+      state.phase = 'playing'; state.currentRound = 1
+      assignPhotos(io, state); emitPhotoState(io, state)
+    })
+
+    socket.on(PHOTO_HOST_REVEAL, ({ roomCode }: { roomCode: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id || state.phase !== 'playing') return
+      state.phase = 'reveal'
+      const [p1, p2] = state.players
+      const sock1 = io.sockets.sockets.get(p1.socketId)
+      const sock2 = io.sockets.sockets.get(p2.socketId)
+      if (sock1 && p2.assignedPhoto) sock1.emit(PHOTO_REVEAL_PHOTO, { photo: p2.assignedPhoto })
+      if (sock2 && p1.assignedPhoto) sock2.emit(PHOTO_REVEAL_PHOTO, { photo: p1.assignedPhoto })
+      emitPhotoState(io, state)
+    })
+
+    socket.on(PHOTO_HOST_AWARD, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id || state.phase !== 'reveal') return
+      const player = state.players.find((p) => p.name === playerName)
+      if (player) player.score += 1
+      advancePhotoRound(io, state)
+    })
+
+    socket.on(PHOTO_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id || state.phase !== 'reveal') return
+      advancePhotoRound(io, state)
+    })
+
+    socket.on(PHOTO_HOST_END, ({ roomCode }: { roomCode: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      finishPhotoGame(io, state)
+    })
+
+    socket.on(PHOTO_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
+      const state = photoRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      state.phase = 'lobby'; state.currentRound = 0; state.winner = null
+      state.usedPhotos.clear()
+      state.players.forEach((p) => { p.score = 0; p.assignedPhoto = null })
+      emitPhotoState(io, state)
+    })
+
+    // ─── Taboo — room management ──────────────────────────────────────────────
+
+    socket.on(TABOO_CREATE, ({ settings }: { settings: TabooSettings }) => {
+      const code = generateTabooCode(tabooRooms)
+      const state: TabooGameState = {
+        roomCode: code, hostSocketId: socket.id, phase: 'lobby', settings,
+        players: [], currentTurnIndex: 0, clues: [], turnScore: 0,
+        lastEvent: null, winner: null, currentCard: null, usedCardIds: new Set(),
+      }
+      tabooRooms.set(code, state); socket.join(code); emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_RECONNECT, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state) { socket.emit(TABOO_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      state.hostSocketId = socket.id; socket.join(roomCode); emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_JOIN, ({ roomCode, playerName }: { roomCode: string; playerName: string }) => {
+      const state = tabooRooms.get(roomCode.toUpperCase())
+      if (!state) { socket.emit(TABOO_ERROR, { message: 'الغرفة غير موجودة' }); return }
+      const existing = state.players.find((p) => p.name === playerName)
+      if (existing) {
+        existing.socketId = socket.id; socket.join(state.roomCode); emitTabooState(io, state)
+        if (state.phase === 'playing' && state.currentCard) {
+          const cg = state.players[state.currentTurnIndex % state.players.length]
+          if (cg?.name === playerName) socket.emit(TABOO_CARD, { targetWord: state.currentCard.targetWord, tabooWords: state.currentCard.tabooWords })
+        }
+        return
+      }
+      if (state.phase !== 'lobby') { socket.emit(TABOO_ERROR, { message: 'اللعبة بدأت بالفعل' }); return }
+      if (state.players.length >= 8) { socket.emit(TABOO_ERROR, { message: 'الغرفة ممتلئة (الحد الأقصى ٨ فرق)' }); return }
+      const player: TabooPlayer = { id: `taboo_${Date.now()}_${Math.random()}`, socketId: socket.id, name: playerName, score: 0, colorIndex: state.players.length }
+      state.players.push(player); socket.join(state.roomCode); emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_START, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      if (state.players.length < 2) { socket.emit(TABOO_ERROR, { message: 'يجب وجود لاعبَين على الأقل' }); return }
+      state.phase = 'playing'; state.currentTurnIndex = 0; state.turnScore = 0; state.lastEvent = null
+      sendCardToClueGiver(io, state); emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_SUBMIT_CLUE, ({ roomCode, clue }: { roomCode: string; clue: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.phase !== 'playing' || !state.currentCard) return
+      const cg = state.players[state.currentTurnIndex % state.players.length]
+      if (!cg || cg.socketId !== socket.id) return
+      const trimmed = clue.trim(); if (!trimmed) return
+      const result = validateClue(trimmed, state.currentCard)
+      if (!result.valid) {
+        state.clues.push({ text: trimmed, valid: false, violatedWord: result.violatedWord })
+        state.lastEvent = 'buzz'; emitTabooState(io, state)
+        sendCardToClueGiver(io, state); emitTabooState(io, state)
+      } else {
+        state.clues.push({ text: trimmed, valid: true }); state.lastEvent = null; emitTabooState(io, state)
+      }
+    })
+
+    socket.on(TABOO_SUBMIT_GUESS, ({ roomCode, guess }: { roomCode: string; guess: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.phase !== 'playing' || !state.currentCard) return
+      const cg = state.players[state.currentTurnIndex % state.players.length]
+      if (!cg || cg.socketId === socket.id) return
+      const trimmed = guess.trim(); if (!trimmed) return
+      const correct = validateGuess(trimmed, state.currentCard.targetWord)
+      socket.emit(TABOO_GUESS_RESULT, { correct })
+      if (correct) {
+        cg.score += 1; state.turnScore += 1; state.lastEvent = 'correct'
+        sendCardToClueGiver(io, state); emitTabooState(io, state)
+      }
+    })
+
+    socket.on(TABOO_SKIP, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.phase !== 'playing') return
+      const cg = state.players[state.currentTurnIndex % state.players.length]
+      if (!cg || cg.socketId !== socket.id) return
+      state.lastEvent = null; sendCardToClueGiver(io, state); emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_END_TURN, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id || state.phase !== 'playing') return
+      state.phase = 'turn_end'; state.currentCard = null; emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_NEXT, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id || state.phase !== 'turn_end') return
+      const totalTurns = state.players.length * state.settings.totalRounds
+      state.currentTurnIndex += 1
+      if (state.currentTurnIndex >= totalTurns) { finishTabooGame(io, state); return }
+      state.phase = 'playing'; state.turnScore = 0; state.lastEvent = null
+      sendCardToClueGiver(io, state); emitTabooState(io, state)
+    })
+
+    socket.on(TABOO_HOST_END, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      finishTabooGame(io, state)
+    })
+
+    socket.on(TABOO_HOST_RESTART, ({ roomCode }: { roomCode: string }) => {
+      const state = tabooRooms.get(roomCode)
+      if (!state || state.hostSocketId !== socket.id) return
+      state.phase = 'lobby'; state.currentTurnIndex = 0; state.clues = []
+      state.turnScore = 0; state.lastEvent = null; state.winner = null
+      state.currentCard = null; state.usedCardIds.clear()
+      state.players.forEach((p) => { p.score = 0 }); emitTabooState(io, state)
+    })
+
     socket.on('disconnect', () => {
       handleLeave(socket.id, rooms, io)
       handleFFLeave(socket.id, ffRooms, io)
       handleImpLeave(socket.id, impRooms, io)
+      handleFastestLeave(socket.id, fastestRooms)
+      handleSpeedLeave(socket.id, speedRooms)
+      handlePhotoLeave(socket.id, photoRooms, io)
+      handleTabooLeave(socket.id, tabooRooms, io)
     })
   })
 
@@ -864,6 +1507,46 @@ function handleImpLeave(socketId: string, impRooms: Map<string, ImpGameState>, i
       emitImpState(io, gs)
       const active = gs.players.filter((p) => !p.isEliminated)
       if (active.every((p) => p.hasVoted)) resolveImpVotes(io, gs)
+    }
+  }
+}
+
+function handleFastestLeave(socketId: string, fastestRooms: Map<string, FastestGameState>) {
+  for (const gs of fastestRooms.values()) {
+    if (gs.hostSocketId === socketId) { gs.hostSocketId = ''; continue }
+    // Players keep their slot — score preserved on reconnect
+  }
+}
+
+function handleSpeedLeave(socketId: string, speedRooms: Map<string, SpeedGameState>) {
+  for (const gs of speedRooms.values()) {
+    if (gs.hostSocketId === socketId) { gs.hostSocketId = ''; continue }
+    // Players keep their slot — score preserved on reconnect
+  }
+}
+
+function handlePhotoLeave(socketId: string, photoRooms: Map<string, PhotoGameState>, io: SocketIOServer) {
+  for (const [code, state] of photoRooms.entries()) {
+    if (state.hostSocketId !== socketId && !state.players.some((p) => p.socketId === socketId)) continue
+    if (state.hostSocketId === socketId) {
+      photoRooms.delete(code)
+      io.to(code).emit(PHOTO_ERROR, { message: 'أنهى المضيف الغرفة' })
+    } else {
+      state.players = state.players.filter((p) => p.socketId !== socketId)
+      emitPhotoState(io, state)
+    }
+  }
+}
+
+function handleTabooLeave(socketId: string, tabooRooms: Map<string, TabooGameState>, io: SocketIOServer) {
+  for (const [code, state] of tabooRooms.entries()) {
+    if (state.hostSocketId !== socketId && !state.players.some((p) => p.socketId === socketId)) continue
+    if (state.hostSocketId === socketId) {
+      tabooRooms.delete(code)
+      io.to(code).emit(TABOO_ERROR, { message: 'أنهى المضيف الغرفة' })
+    } else {
+      state.players = state.players.filter((p) => p.socketId !== socketId)
+      emitTabooState(io, state)
     }
   }
 }

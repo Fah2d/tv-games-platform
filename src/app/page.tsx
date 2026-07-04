@@ -27,6 +27,34 @@ const GAMES = [
     players: '٣-١٠',
     available: true,
   },
+  {
+    id: 'fastest',
+    name: 'من الأسرع؟',
+    description: 'لعبة السرعة والبزرة',
+    players: '٢-٨',
+    available: true,
+  },
+  {
+    id: 'speed-challenge',
+    name: 'التحدي السريع',
+    description: 'تحديات سريعة وممتعة',
+    players: '٢-٨',
+    available: true,
+  },
+  {
+    id: 'photogame',
+    name: 'لعبة الصور',
+    description: 'صف الصورة لصاحبك',
+    players: '٢',
+    available: true,
+  },
+  {
+    id: 'taboo',
+    name: 'ولا كلمة',
+    description: 'لعبة التابو العربية',
+    players: '٢-٨',
+    available: true,
+  },
 ]
 
 export default function HubPage() {

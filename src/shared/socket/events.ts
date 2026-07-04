@@ -55,3 +55,78 @@ export const IMP_HOST_START_VOTING = 'IMP_HOST_START_VOTING' as const
 export const IMP_HOST_NEXT = 'IMP_HOST_NEXT' as const
 export const IMP_HOST_END = 'IMP_HOST_END' as const
 export const IMP_HOST_RESTART = 'IMP_HOST_RESTART' as const
+
+// Fastest (من الأسرع؟) — room lifecycle
+export const FASTEST_CREATE = 'FASTEST_CREATE' as const
+export const FASTEST_JOIN = 'FASTEST_JOIN' as const
+export const FASTEST_HOST_RECONNECT = 'FASTEST_HOST_RECONNECT' as const
+export const FASTEST_RECONNECT = 'FASTEST_RECONNECT' as const
+export const FASTEST_STATE = 'FASTEST_STATE' as const
+export const FASTEST_ERROR = 'FASTEST_ERROR' as const
+
+// Fastest — game flow
+export const FASTEST_START = 'FASTEST_START' as const
+export const FASTEST_BUZZ = 'FASTEST_BUZZ' as const
+
+// Fastest — host controls
+export const FASTEST_HOST_AWARD = 'FASTEST_HOST_AWARD' as const
+export const FASTEST_HOST_NEXT = 'FASTEST_HOST_NEXT' as const
+export const FASTEST_HOST_END = 'FASTEST_HOST_END' as const
+export const FASTEST_HOST_RESTART = 'FASTEST_HOST_RESTART' as const
+
+// Speed Challenge (لعبة التحدي السريع) — room lifecycle
+export const SPEED_CREATE = 'SPEED_CREATE' as const
+export const SPEED_JOIN = 'SPEED_JOIN' as const
+export const SPEED_HOST_RECONNECT = 'SPEED_HOST_RECONNECT' as const
+export const SPEED_RECONNECT = 'SPEED_RECONNECT' as const
+export const SPEED_STATE = 'SPEED_STATE' as const
+export const SPEED_ERROR = 'SPEED_ERROR' as const
+
+// Speed Challenge — game flow
+export const SPEED_START = 'SPEED_START' as const
+
+// Speed Challenge — host controls
+export const SPEED_HOST_AWARD = 'SPEED_HOST_AWARD' as const
+export const SPEED_HOST_NEXT = 'SPEED_HOST_NEXT' as const
+export const SPEED_HOST_END = 'SPEED_HOST_END' as const
+export const SPEED_HOST_RESTART = 'SPEED_HOST_RESTART' as const
+
+// Photo Game (لعبة الصور) — room lifecycle
+export const PHOTO_CREATE = 'PHOTO_CREATE' as const
+export const PHOTO_HOST_RECONNECT = 'PHOTO_HOST_RECONNECT' as const
+export const PHOTO_RECONNECT = 'PHOTO_RECONNECT' as const
+export const PHOTO_STATE = 'PHOTO_STATE' as const
+export const PHOTO_ERROR = 'PHOTO_ERROR' as const
+export const PHOTO_YOUR_PHOTO = 'PHOTO_YOUR_PHOTO' as const
+export const PHOTO_REVEAL_PHOTO = 'PHOTO_REVEAL_PHOTO' as const
+
+// Photo Game — game flow
+export const PHOTO_START = 'PHOTO_START' as const
+
+// Photo Game — host controls
+export const PHOTO_HOST_REVEAL = 'PHOTO_HOST_REVEAL' as const
+export const PHOTO_HOST_AWARD = 'PHOTO_HOST_AWARD' as const
+export const PHOTO_HOST_NEXT = 'PHOTO_HOST_NEXT' as const
+export const PHOTO_HOST_END = 'PHOTO_HOST_END' as const
+export const PHOTO_HOST_RESTART = 'PHOTO_HOST_RESTART' as const
+
+// Taboo Game (ولا كلمة) — room lifecycle
+export const TABOO_CREATE = 'TABOO_CREATE' as const
+export const TABOO_HOST_RECONNECT = 'TABOO_HOST_RECONNECT' as const
+export const TABOO_JOIN = 'TABOO_JOIN' as const
+export const TABOO_STATE = 'TABOO_STATE' as const
+export const TABOO_ERROR = 'TABOO_ERROR' as const
+export const TABOO_CARD = 'TABOO_CARD' as const
+export const TABOO_GUESS_RESULT = 'TABOO_GUESS_RESULT' as const
+
+// Taboo Game — game flow
+export const TABOO_START = 'TABOO_START' as const
+export const TABOO_SUBMIT_CLUE = 'TABOO_SUBMIT_CLUE' as const
+export const TABOO_SUBMIT_GUESS = 'TABOO_SUBMIT_GUESS' as const
+export const TABOO_SKIP = 'TABOO_SKIP' as const
+
+// Taboo Game — host controls
+export const TABOO_HOST_END_TURN = 'TABOO_HOST_END_TURN' as const
+export const TABOO_HOST_NEXT = 'TABOO_HOST_NEXT' as const
+export const TABOO_HOST_END = 'TABOO_HOST_END' as const
+export const TABOO_HOST_RESTART = 'TABOO_HOST_RESTART' as const
