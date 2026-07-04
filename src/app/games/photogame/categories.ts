@@ -25,7 +25,7 @@ export function pickRandomPhoto(selectedCategories: string[], usedPhotos: Set<st
   for (const catId of selectedCategories) {
     const files = PHOTO_FILES[catId] ?? []
     for (const file of files) {
-      const path = `/photogame/photogame/${catId}/${file}`
+      const path = `/photogame/${catId}/${file}`
       if (!usedPhotos.has(path)) available.push(path)
     }
   }
